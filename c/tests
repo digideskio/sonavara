@@ -26,9 +26,9 @@ match hmm
 match hMm
 
 # test []
-#regex [abc]+
-#match a
-#match c
-#match aaa
-#match acbbac
-#differ abdc
+regex [abc]+
+match a
+match c
+match aaa
+match acbbac
+differ abdc
