@@ -153,7 +153,7 @@ struct regex_token *tokenise(char const *pattern) {
                 return NULL;
             }
 
-            while (--natom) {
+            while (--natom > 0) {
                 token_append(&write, TYPE_CONCAT);
             }
             
@@ -454,7 +454,7 @@ void step(struct state_list *clist, int c, struct state_list **nlist) {
 
 int regex_match(regex_t *re, char const *s) {
     struct state_list *clist = NULL;
-    state_list_prepend(&clist, re->entry);
+    state_list_add(&clist, re->entry);
 
     for (; *s; ++s) {
         struct state_list *nlist = NULL;
