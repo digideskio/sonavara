@@ -1,23 +1,73 @@
+#include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "engine.h"
 
+#define BITMASK(b) (1 < ((b) % CHAR_BIT))
+#define BITSLOT(b) ((b) / CHAR_BIT)
+#define BITSET(a, b) ((a)[BITSLOT(b)] |= BITMASK(b))
+#define BITCLEAR(a, b) ((a)[BITSLOT(b)] &= ~BITMASK(b))
+#define BITTEST(a, b) ((a)[BITSLOT(b)] & BITMASK(b))
+#define BITNSLOTS(nb) (((nb) + CHAR_BIT - 1) / CHAR_BIT)
+
 enum regex_token_type {
-    ATOM,
-    CONCAT,
-    ALTERNATIVE,
-    ZERO_MANY,
-    ONE_MANY,
-    ZERO_ONE,
+    TYPE_ATOM,
+    TYPE_CONCAT,
+    TYPE_ALTERNATIVE,
+    TYPE_ZERO_MANY,
+    TYPE_ONE_MANY,
+    TYPE_ZERO_ONE,
 };
 
 struct regex_token {
     enum regex_token_type type;
-    union {
-        char atom;
-    };
+    unsigned char atom[BITNSLOTS(256)];
     struct regex_token *next;
 };
+
+struct regex_paren {
+    int nalt;
+    int natom;
+    struct regex_paren *prev;
+};
+
+enum state_type {
+    STATE_ATOM,
+    STATE_SPLIT,
+    STATE_MATCH,
+    STATE_MARK
+};
+
+struct state {
+    enum state_type type;
+    union {
+        unsigned char atom[BITNSLOTS(256)];
+    };
+    struct state *o1, *o2;
+};
+
+struct ptrlist {
+    struct state **s;
+    struct ptrlist *next;
+};
+
+struct frag {
+    struct state *start;
+    struct ptrlist *out;
+    struct frag *prev;
+};
+
+struct regex {
+    struct state *entry;
+};
+
+struct state_list {
+    struct state *s;
+    struct state_list *next;
+};
+
+struct state matchstate = { STATE_MATCH };
 
 void append_token(struct regex_token ***writep, enum regex_token_type type) {
     **writep = malloc(sizeof(***writep));
@@ -28,8 +78,9 @@ void append_token(struct regex_token ***writep, enum regex_token_type type) {
 
 void append_atom(struct regex_token ***writep, char atom) {
     **writep = malloc(sizeof(***writep));
-    (**writep)->type = ATOM;
-    (**writep)->atom = atom;
+    (**writep)->type = TYPE_ATOM;
+    memset((**writep)->atom, 0, BITNSLOTS(256));
+    BITSET((**writep)->atom, (int) atom);
     (**writep)->next = NULL;
     *writep = &((**writep)->next);
 }
@@ -42,11 +93,6 @@ void free_token(struct regex_token *token) {
     }
 }
 
-struct regex_paren {
-    int nalt;
-    int natom;
-    struct regex_paren *prev;
-};
 
 void free_parens(struct regex_paren *paren) {
     while (paren) {
@@ -69,7 +115,7 @@ struct regex_token *tokenise(char const *pattern) {
         case '(':
             if (natom > 1) {
                 --natom;
-                append_token(&write, CONCAT);
+                append_token(&write, TYPE_CONCAT);
             }
 
             struct regex_paren *new_paren = malloc(sizeof(*new_paren));
@@ -90,11 +136,11 @@ struct regex_token *tokenise(char const *pattern) {
             }
 
             while (--natom) {
-                append_token(&write, CONCAT);
+                append_token(&write, TYPE_CONCAT);
             }
             
             for (; nalt > 0; --nalt) {
-                append_token(&write, ALTERNATIVE);
+                append_token(&write, TYPE_ALTERNATIVE);
             }
 
             nalt = paren->nalt;
@@ -114,7 +160,7 @@ struct regex_token *tokenise(char const *pattern) {
                 return NULL;
             }
             while (--natom > 0) {
-                append_token(&write, CONCAT);
+                append_token(&write, TYPE_CONCAT);
             }
             ++nalt;
             break;
@@ -125,7 +171,7 @@ struct regex_token *tokenise(char const *pattern) {
                 free_parens(paren);
                 return NULL;
             }
-            append_token(&write, ZERO_MANY);
+            append_token(&write, TYPE_ZERO_MANY);
             break;
 
         case '+':
@@ -134,7 +180,7 @@ struct regex_token *tokenise(char const *pattern) {
                 free_parens(paren);
                 return NULL;
             }
-            append_token(&write, ONE_MANY);
+            append_token(&write, TYPE_ONE_MANY);
             break;
 
         case '?':
@@ -143,13 +189,13 @@ struct regex_token *tokenise(char const *pattern) {
                 free_parens(paren);
                 return NULL;
             }
-            append_token(&write, ZERO_ONE);
+            append_token(&write, TYPE_ZERO_ONE);
             break;
 
         default:
             if (natom > 1) {
                 --natom;
-                append_token(&write, CONCAT);
+                append_token(&write, TYPE_CONCAT);
             }
             append_atom(&write, *pattern);
             ++natom;
@@ -164,47 +210,36 @@ struct regex_token *tokenise(char const *pattern) {
     }
 
     while (--natom > 0) {
-        append_token(&write, CONCAT);
+        append_token(&write, TYPE_CONCAT);
     }
 
     for (; nalt > 0; --nalt) {
-        append_token(&write, ALTERNATIVE);
+        append_token(&write, TYPE_ALTERNATIVE);
     }
 
     return r;
 }
 
-#define CHAR_SPLIT 256
-#define CHAR_MATCH 257
-#define CHAR_MARK 258
-
-struct state {
-    int c;
-    struct state *o1, *o2;
-};
-
-struct state *state(int c, struct state *o1, struct state *o2) {
+struct state *state(enum state_type type, struct state *o1, struct state *o2) {
     struct state *s = malloc(sizeof(*s));
-    s->c = c;
+    s->type = type;
     s->o1 = o1;
     s->o2 = o2;
     return s;
 }
-
-struct state matchstate = { CHAR_MATCH };
 
 void mark_states(struct state *s) {
     if (!s || s == &matchstate) {
         return;
     }
 
-    s->c = CHAR_MARK;
+    s->type = STATE_MARK;
 
-    if (s->o1 && s->o1->c == CHAR_MARK) {
+    if (s->o1 && s->o1->type == STATE_MARK) {
         s->o1 = NULL;
     }
 
-    if (s->o2 && s->o2->c == CHAR_MARK) {
+    if (s->o2 && s->o2->type == STATE_MARK) {
         s->o2 = NULL;
     }
 
@@ -227,11 +262,6 @@ void free_state(struct state *s) {
 
     free_state_recursive(s);
 }
-
-struct ptrlist {
-    struct state **s;
-    struct ptrlist *next;
-};
 
 struct ptrlist *list1(struct state **s) {
     struct ptrlist *l = malloc(sizeof(*l));
@@ -258,16 +288,6 @@ struct ptrlist *append(struct ptrlist *l1, struct ptrlist *l2) {
     l1->next = l2;
     return oldl1;
 }
-
-struct frag {
-    struct state *start;
-    struct ptrlist *out;
-    struct frag *prev;
-};
-
-struct regex {
-    struct state *entry;
-};
 
 struct frag *frag(struct state *start, struct ptrlist *out, struct frag *prev) {
     struct frag *frag = malloc(sizeof(*frag));
@@ -300,37 +320,38 @@ struct state *token2nfa(struct regex_token *token) {
 
     for (; token; token = token->next) {
         switch (token->type) {
-        case ATOM:
-            s = state(token->atom, NULL, NULL);
+        case TYPE_ATOM:
+            s = state(STATE_ATOM, NULL, NULL);
+            memcpy(s->atom, token->atom, BITNSLOTS(256));
             push_frag(&stackp, s, list1(&s->o1));
             break;
-        case CONCAT:
+        case TYPE_CONCAT:
             e2 = pop_frag(&stackp);
             e1 = pop_frag(&stackp);
             patch(e1.out, e2.start);
             push_frag(&stackp, e1.start, e2.out);
             break;
-        case ALTERNATIVE:
+        case TYPE_ALTERNATIVE:
             e2 = pop_frag(&stackp);
             e1 = pop_frag(&stackp);
-            s = state(CHAR_SPLIT, e1.start, e2.start);
+            s = state(STATE_SPLIT, e1.start, e2.start);
             push_frag(&stackp, s, append(e1.out, e2.out));
             break;
-        case ZERO_MANY:
+        case TYPE_ZERO_MANY:
             e1 = pop_frag(&stackp);
-            s = state(CHAR_SPLIT, e1.start, NULL);
+            s = state(STATE_SPLIT, e1.start, NULL);
             patch(e1.out, s);
             push_frag(&stackp, s, list1(&s->o2));
             break;
-        case ONE_MANY:
+        case TYPE_ONE_MANY:
             e1 = pop_frag(&stackp);
-            s = state(CHAR_SPLIT, e1.start, NULL);
+            s = state(STATE_SPLIT, e1.start, NULL);
             patch(e1.out, s);
             push_frag(&stackp, e1.start, list1(&s->o2));
             break;
-        case ZERO_ONE:
+        case TYPE_ZERO_ONE:
             e1 = pop_frag(&stackp);
-            s = state(CHAR_SPLIT, e1.start, NULL);
+            s = state(STATE_SPLIT, e1.start, NULL);
             push_frag(&stackp, s, append(e1.out, list1(&s->o2)));
             break;
         }
@@ -360,11 +381,6 @@ void regex_free(regex_t *re) {
     free(re);
 }
 
-struct state_list {
-    struct state *s;
-    struct state_list *next;
-};
-
 void prepend(struct state_list **l, struct state *s) {
     struct state_list *nl = malloc(sizeof(*nl));
     nl->s = s;
@@ -385,7 +401,7 @@ void addstate(struct state_list **l, struct state *s) {
         return;
     }
 
-    if (s->c == CHAR_SPLIT) {
+    if (s->type == STATE_SPLIT) {
         addstate(l, s->o1);
         addstate(l, s->o2);
         return;
@@ -397,7 +413,7 @@ void addstate(struct state_list **l, struct state *s) {
 void step(struct state_list *clist, int c, struct state_list **nlist) {
     for (; clist; clist = clist->next) {
         struct state *s = clist->s;
-        if (s->c == c) {
+        if (s->type == STATE_ATOM && BITTEST(s->atom, c)) {
             addstate(nlist, s->o1);
         }
     }
@@ -415,7 +431,7 @@ int regex_match(regex_t *re, char const *s) {
     }
 
     for (; clist; clist = clist->next) {
-        if (clist->s->c == CHAR_MATCH) {
+        if (clist->s->type == STATE_MATCH) {
             free_list(clist);
             return 1;
         }

@@ -1,6 +1,9 @@
 SRCS := $(wildcard *.c)
 OBJS := $(SRCS:%.c=obj/%.o)
 
+all: test
+	./test
+
 test: obj/libengine.a obj/test.o
 	$(CC) -o $@ $^
 

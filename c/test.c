@@ -7,13 +7,16 @@
      ssize_t getline(char ** restrict linep, size_t * restrict linecapp, FILE * restrict stream);
 
 int main(int argc, char **argv) {
-    regex_t *re = NULL;
-
     FILE *f = fopen("tests", "r");
     if (!f) {
         fprintf(stderr, "Could not open tests\n");
         exit(1);
     }
+
+    int passed = 0,
+        failed = 0,
+        warning = 0;
+    regex_t *re = NULL;
 
     char *re_str;
 
@@ -37,13 +40,20 @@ int main(int argc, char **argv) {
         } else if (strncmp(line, "match ", 6) == 0) {
             if (!regex_match(re, line + 6)) {
                 fprintf(stderr, "FAIL: /%s/ should match %s\n", re_str, line + 6);
+                ++failed;
+            } else {
+                ++passed;
             }
         } else if (strncmp(line, "differ ", 7) == 0) {
             if (regex_match(re, line + 7)) {
                 fprintf(stderr, "FAIL: /%s/ should not match %s\n", re_str, line + 7);
+                ++failed;
+            } else {
+                ++passed;
             }
         } else if (len > 0 && line[0] != '#') {
             fprintf(stderr, "WARN: unknown line: %s\n", line);
+            ++warning;
         }
     }
 
@@ -56,5 +66,11 @@ int main(int argc, char **argv) {
         free(line);
     }
 
-    return 0;
+    printf("%d passed, %d failed", passed, failed);
+    if (warning) {
+        printf(", %d warning%s", warning, warning == 1 ? "" : "s");
+    }
+    printf("\n");
+
+    return failed > 0 || warning > 0;
 }

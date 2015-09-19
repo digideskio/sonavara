@@ -24,3 +24,11 @@ match hm
 match hM
 match hmm
 match hMm
+
+# test []
+#regex [abc]+
+#match a
+#match c
+#match aaa
+#match acbbac
+#differ abdc
