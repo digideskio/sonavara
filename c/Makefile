@@ -2,7 +2,7 @@ SRCS := $(wildcard *.c)
 OBJS := $(SRCS:%.c=obj/%.o)
 
 all: test
-	./test
+	valgrind --dsymutil=yes --leak-check=full ./test
 
 test: obj/libengine.a obj/test.o
 	$(CC) -o $@ $^

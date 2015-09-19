@@ -360,12 +360,13 @@ struct state *token2nfa(struct regex_token *token) {
     }
 
     e1 = frag_pop(&stack);
+    ptrlist_patch(e1.out, &matchstate);
+
     if (stack) {
-        // TODO: free everything
+        state_free(e1.start);
         return NULL;
     }
 
-    ptrlist_patch(e1.out, &matchstate);
     return e1.start;
 }
 
@@ -441,8 +442,8 @@ int regex_match(regex_t *re, char const *s) {
         clist = nlist;
     }
 
-    for (; clist; clist = clist->next) {
-        if (clist->s->type == STATE_MATCH) {
+    for (struct state_list *search = clist; search; search = search->next) {
+        if (search->s->type == STATE_MATCH) {
             state_list_free(clist);
             return 1;
         }

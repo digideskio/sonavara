@@ -72,6 +72,8 @@ int main(int argc, char **argv) {
         }
     }
 
+    fclose(f);
+
     if (re) {
         regex_free(re);
         free(re_str);
