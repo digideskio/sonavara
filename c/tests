@@ -1,3 +1,4 @@
+# test *, |, ()
 regex o(ab|xy)*d
 match od
 match oabd
@@ -9,11 +10,14 @@ differ abxy
 differ oabbd
 differ oxyad
 
-regex OK?
+# test ?
+regex O(KK)?
 match O
-match OK
+match OKK
 differ OO
+differ OK
 
+# test +
 regex h(m|M)+
 differ h
 match hm

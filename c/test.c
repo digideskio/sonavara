@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
             if (regex_match(re, line + 7)) {
                 fprintf(stderr, "FAIL: /%s/ should not match %s\n", re_str, line + 7);
             }
-        } else if (len > 0) {
+        } else if (len > 0 && line[0] != '#') {
             fprintf(stderr, "WARN: unknown line: %s\n", line);
         }
     }
