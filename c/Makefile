@@ -5,4 +5,7 @@ engine: $(OBJS)
 	$(CC) -o $@ $^
 
 obj/%.o: %.c
-	$(CC) -c -o $@ $^
+	$(CC) -g -c -o $@ $^
+
+clean:
+	-rm engine $(OBJS)
