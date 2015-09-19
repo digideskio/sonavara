@@ -76,11 +76,10 @@ void token_append(struct regex_token ***writep, enum regex_token_type type) {
     *writep = &((**writep)->next);
 }
 
-void token_append_atom(struct regex_token ***writep, char atom) {
+void token_append_atom(struct regex_token ***writep, unsigned char *atom) {
     **writep = malloc(sizeof(***writep));
     (**writep)->type = TYPE_ATOM;
-    memset((**writep)->atom, 0, BITNSLOTS(256));
-    BITSET((**writep)->atom, (int) atom);
+    memcpy((**writep)->atom, atom, BITNSLOTS(256));
     (**writep)->next = NULL;
     *writep = &((**writep)->next);
 }
@@ -110,17 +109,35 @@ struct regex_token *tokenise(char const *pattern) {
     int natom = 0;
     int nalt = 0;
     int escape = 0;
+    int cclass = 0;
 
     unsigned char atom[BITNSLOTS(256)];
 
     for (; *pattern; ++pattern) {
+        if (cclass) {
+            if (*pattern == ']') {
+                cclass = 0;
+                if (natom > 1) {
+                    --natom;
+                    token_append(&write, TYPE_CONCAT);
+                }
+                token_append_atom(&write, atom);
+                ++natom;
+            } else {
+                BITSET(atom, (int) *pattern);
+            }
+            continue;
+        }
+
         if (escape) {
             escape = 0;
             if (natom > 1) {
                 --natom;
                 token_append(&write, TYPE_CONCAT);
             }
-            token_append_atom(&write, *pattern);
+            memset(atom, 0, BITNSLOTS(256));
+            BITSET(atom, (int) *pattern);
+            token_append_atom(&write, atom);
             ++natom;
             continue;
         }
@@ -128,6 +145,11 @@ struct regex_token *tokenise(char const *pattern) {
         switch (*pattern) {
         case '\\':
             escape = 1;
+            break;
+
+        case '[':
+            cclass = 1;
+            memset(atom, 0, BITNSLOTS(256));
             break;
 
         case '(':
@@ -215,7 +237,9 @@ struct regex_token *tokenise(char const *pattern) {
                 --natom;
                 token_append(&write, TYPE_CONCAT);
             }
-            token_append_atom(&write, *pattern);
+            memset(atom, 0, BITNSLOTS(256));
+            BITSET(atom, (int) *pattern);
+            token_append_atom(&write, atom);
             ++natom;
             break;
         }
@@ -227,7 +251,7 @@ struct regex_token *tokenise(char const *pattern) {
         return NULL;
     }
 
-    if (escape) {
+    if (escape || cclass) {
         token_free(r);
         return NULL;
     }

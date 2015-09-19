@@ -56,3 +56,5 @@ match c
 match aaa
 match acbbac
 differ abdc
+
+noregex [ab
