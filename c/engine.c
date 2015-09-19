@@ -109,11 +109,27 @@ struct regex_token *tokenise(char const *pattern) {
     struct regex_paren *paren = NULL;
     int natom = 0;
     int nalt = 0;
+    int escape = 0;
 
     unsigned char atom[BITNSLOTS(256)];
 
     for (; *pattern; ++pattern) {
+        if (escape) {
+            escape = 0;
+            if (natom > 1) {
+                --natom;
+                token_append(&write, TYPE_CONCAT);
+            }
+            token_append_atom(&write, *pattern);
+            ++natom;
+            continue;
+        }
+
         switch (*pattern) {
+        case '\\':
+            escape = 1;
+            break;
+
         case '(':
             if (natom > 1) {
                 --natom;
@@ -207,6 +223,11 @@ struct regex_token *tokenise(char const *pattern) {
 
     if (paren) {
         paren_free(paren);
+        token_free(r);
+        return NULL;
+    }
+
+    if (escape) {
         token_free(r);
         return NULL;
     }

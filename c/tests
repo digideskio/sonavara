@@ -10,6 +10,19 @@ differ abxy
 differ oabbd
 differ oxyad
 
+regex ((ab)*cd)*
+match 
+match cd
+match cdcd
+match abcd
+match abcdcd
+match ababcdabcd
+
+noregex (abc
+noregex abc)
+noregex ((abc)
+noregex ((abc)))
+
 # test ?
 regex O(KK)?
 match O
@@ -33,6 +46,8 @@ differ a
 regex \\a
 match \a
 differ a
+
+noregex a\
 
 # test []
 regex [abc]+

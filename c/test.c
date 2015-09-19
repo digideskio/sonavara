@@ -41,6 +41,22 @@ int main(int argc, char **argv) {
                 ++failed;
             } else {
                 re_str = strdup(line + 6);
+                ++passed;
+            }
+        } else if (strncmp(line, "noregex ", 8) == 0) {
+            if (re) {
+                regex_free(re);
+                free(re_str);
+            }
+
+            re = regex_compile(line + 8);
+            if (re) {
+                regex_free(re);
+                re = NULL;
+                fprintf(stderr, "FAIL: /%s/ did compile\n", line + 8);
+                ++failed;
+            } else {
+                ++passed;
             }
         } else if (strncmp(line, "match ", 6) == 0) {
             if (!re) {
