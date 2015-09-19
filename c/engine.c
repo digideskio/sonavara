@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "engine.h"
@@ -173,35 +172,6 @@ struct regex_token *tokenise(char const *pattern) {
     }
 
     return r;
-}
-
-void format_token(struct regex_token *token) {
-    while (token) {
-        switch (token->type) {
-        case ATOM:
-            printf("%c", token->atom);
-            break;
-        case CONCAT:
-            printf(".");
-            break;
-        case ALTERNATIVE:
-            printf("|");
-            break;
-        case ZERO_MANY:
-            printf("*");
-            break;
-        case ONE_MANY:
-            printf("+");
-            break;
-        case ZERO_ONE:
-            printf("?");
-            break;
-        }
-
-        token = token->next;
-    }
-
-    printf("\n");
 }
 
 #define CHAR_SPLIT 256
@@ -453,17 +423,6 @@ int regex_match(regex_t *re, char const *s) {
 
     free_list(clist);
 
-    return 0;
-}
-
-int main(int argc, char **argv) {
-    regex_t *re = regex_compile("o(ab|xy)*d");
-    printf("oababd: %d\n", regex_match(re, "oababd"));
-    printf("oxyabd: %d\n", regex_match(re, "oxyabd"));
-    printf("oabd: %d\n", regex_match(re, "oabd"));
-    printf("od: %d\n", regex_match(re, "od"));
-    printf("oxd: %d\n", regex_match(re, "oxd"));
-    regex_free(re);
     return 0;
 }
 

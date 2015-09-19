@@ -1,0 +1,22 @@
+regex o(ab|xy)*d
+match od
+match oabd
+match oxyd
+match oabxyd
+match oxyababxyd
+differ 
+differ abxy
+differ oabbd
+differ oxyad
+
+regex OK?
+match O
+match OK
+differ OO
+
+regex h(m|M)+
+differ h
+match hm
+match hM
+match hmm
+match hMm
