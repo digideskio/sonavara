@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "engine.h"
+
 enum regex_token_type {
     ATOM,
     CONCAT,
@@ -293,9 +295,9 @@ struct frag {
     struct frag *prev;
 };
 
-typedef struct {
+struct regex {
     struct state *entry;
-} regex_t;
+};
 
 struct frag *frag(struct state *start, struct ptrlist *out, struct frag *prev) {
     struct frag *frag = malloc(sizeof(*frag));
@@ -374,7 +376,7 @@ struct state *token2nfa(struct regex_token *token) {
     return e1.start;
 }
 
-regex_t *compile(char const *pattern) {
+regex_t *regex_compile(char const *pattern) {
     struct regex_token *token = tokenise(pattern);
     struct state *state = token2nfa(token);
     free_token(token);
@@ -383,7 +385,7 @@ regex_t *compile(char const *pattern) {
     return re;
 }
 
-void free_regex(regex_t *re) {
+void regex_free(regex_t *re) {
     free_state(re->entry);
     free(re);
 }
@@ -431,7 +433,7 @@ void step(struct state_list *clist, int c, struct state_list **nlist) {
     }
 }
 
-int match(regex_t *re, char const *s) {
+int regex_match(regex_t *re, char const *s) {
     struct state_list *clist = NULL;
     prepend(&clist, re->entry);
 
@@ -455,13 +457,13 @@ int match(regex_t *re, char const *s) {
 }
 
 int main(int argc, char **argv) {
-    regex_t *re = compile("o(ab|xy)*d");
-    printf("oababd: %d\n", match(re, "oababd"));
-    printf("oxyabd: %d\n", match(re, "oxyabd"));
-    printf("oabd: %d\n", match(re, "oabd"));
-    printf("od: %d\n", match(re, "od"));
-    printf("oxd: %d\n", match(re, "oxd"));
-    free_regex(re);
+    regex_t *re = regex_compile("o(ab|xy)*d");
+    printf("oababd: %d\n", regex_match(re, "oababd"));
+    printf("oxyabd: %d\n", regex_match(re, "oxyabd"));
+    printf("oabd: %d\n", regex_match(re, "oabd"));
+    printf("od: %d\n", regex_match(re, "od"));
+    printf("oxd: %d\n", regex_match(re, "oxd"));
+    regex_free(re);
     return 0;
 }
 
