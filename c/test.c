@@ -35,21 +35,36 @@ int main(int argc, char **argv) {
                 free(re_str);
             }
 
-            re_str = strdup(line + 6);
-            re = regex_compile(re_str);
-        } else if (strncmp(line, "match ", 6) == 0) {
-            if (!regex_match(re, line + 6)) {
-                fprintf(stderr, "FAIL: /%s/ should match %s\n", re_str, line + 6);
+            re = regex_compile(line + 6);
+            if (!re) {
+                fprintf(stderr, "FAIL: /%s/ did not compile\n", line + 6);
                 ++failed;
             } else {
-                ++passed;
+                re_str = strdup(line + 6);
+            }
+        } else if (strncmp(line, "match ", 6) == 0) {
+            if (!re) {
+                fprintf(stderr, "WARN: no regular expression for 'match'\n");
+                ++warning;
+            } else {
+                if (!regex_match(re, line + 6)) {
+                    fprintf(stderr, "FAIL: /%s/ should match %s\n", re_str, line + 6);
+                    ++failed;
+                } else {
+                    ++passed;
+                }
             }
         } else if (strncmp(line, "differ ", 7) == 0) {
-            if (regex_match(re, line + 7)) {
-                fprintf(stderr, "FAIL: /%s/ should not match %s\n", re_str, line + 7);
-                ++failed;
+            if (!re) {
+                fprintf(stderr, "WARN: no regular expression for 'differ'\n");
+                ++warning;
             } else {
-                ++passed;
+                if (regex_match(re, line + 7)) {
+                    fprintf(stderr, "FAIL: /%s/ should not match %s\n", re_str, line + 7);
+                    ++failed;
+                } else {
+                    ++passed;
+                }
             }
         } else if (len > 0 && line[0] != '#') {
             fprintf(stderr, "WARN: unknown line: %s\n", line);

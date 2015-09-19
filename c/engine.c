@@ -69,14 +69,14 @@ struct state_list {
 
 struct state matchstate = { STATE_MATCH };
 
-void append_token(struct regex_token ***writep, enum regex_token_type type) {
+void token_append(struct regex_token ***writep, enum regex_token_type type) {
     **writep = malloc(sizeof(***writep));
     (**writep)->type = type;
     (**writep)->next = NULL;
     *writep = &((**writep)->next);
 }
 
-void append_atom(struct regex_token ***writep, char atom) {
+void token_append_atom(struct regex_token ***writep, char atom) {
     **writep = malloc(sizeof(***writep));
     (**writep)->type = TYPE_ATOM;
     memset((**writep)->atom, 0, BITNSLOTS(256));
@@ -85,7 +85,7 @@ void append_atom(struct regex_token ***writep, char atom) {
     *writep = &((**writep)->next);
 }
 
-void free_token(struct regex_token *token) {
+void token_free(struct regex_token *token) {
     while (token) {
         struct regex_token *next = token->next;
         free(token);
@@ -94,7 +94,7 @@ void free_token(struct regex_token *token) {
 }
 
 
-void free_parens(struct regex_paren *paren) {
+void paren_free(struct regex_paren *paren) {
     while (paren) {
         struct regex_paren *prev = paren->prev;
         free(paren);
@@ -110,12 +110,14 @@ struct regex_token *tokenise(char const *pattern) {
     int natom = 0;
     int nalt = 0;
 
+    unsigned char atom[BITNSLOTS(256)];
+
     for (; *pattern; ++pattern) {
         switch (*pattern) {
         case '(':
             if (natom > 1) {
                 --natom;
-                append_token(&write, TYPE_CONCAT);
+                token_append(&write, TYPE_CONCAT);
             }
 
             struct regex_paren *new_paren = malloc(sizeof(*new_paren));
@@ -130,17 +132,17 @@ struct regex_token *tokenise(char const *pattern) {
 
         case ')':
             if (!paren || natom == 0) {
-                free_token(r);
-                free_parens(paren);
+                token_free(r);
+                paren_free(paren);
                 return NULL;
             }
 
             while (--natom) {
-                append_token(&write, TYPE_CONCAT);
+                token_append(&write, TYPE_CONCAT);
             }
             
             for (; nalt > 0; --nalt) {
-                append_token(&write, TYPE_ALTERNATIVE);
+                token_append(&write, TYPE_ALTERNATIVE);
             }
 
             nalt = paren->nalt;
@@ -155,66 +157,66 @@ struct regex_token *tokenise(char const *pattern) {
 
         case '|':
             if (natom == 0) {
-                free_token(r);
-                free_parens(paren);
+                token_free(r);
+                paren_free(paren);
                 return NULL;
             }
             while (--natom > 0) {
-                append_token(&write, TYPE_CONCAT);
+                token_append(&write, TYPE_CONCAT);
             }
             ++nalt;
             break;
 
         case '*':
             if (natom == 0) {
-                free_token(r);
-                free_parens(paren);
+                token_free(r);
+                paren_free(paren);
                 return NULL;
             }
-            append_token(&write, TYPE_ZERO_MANY);
+            token_append(&write, TYPE_ZERO_MANY);
             break;
 
         case '+':
             if (natom == 0) {
-                free_token(r);
-                free_parens(paren);
+                token_free(r);
+                paren_free(paren);
                 return NULL;
             }
-            append_token(&write, TYPE_ONE_MANY);
+            token_append(&write, TYPE_ONE_MANY);
             break;
 
         case '?':
             if (natom == 0) {
-                free_token(r);
-                free_parens(paren);
+                token_free(r);
+                paren_free(paren);
                 return NULL;
             }
-            append_token(&write, TYPE_ZERO_ONE);
+            token_append(&write, TYPE_ZERO_ONE);
             break;
 
         default:
             if (natom > 1) {
                 --natom;
-                append_token(&write, TYPE_CONCAT);
+                token_append(&write, TYPE_CONCAT);
             }
-            append_atom(&write, *pattern);
+            token_append_atom(&write, *pattern);
             ++natom;
             break;
         }
     }
 
     if (paren) {
-            free_parens(paren);
-            free_token(r);
-            return NULL;
+        paren_free(paren);
+        token_free(r);
+        return NULL;
     }
 
     while (--natom > 0) {
-        append_token(&write, TYPE_CONCAT);
+        token_append(&write, TYPE_CONCAT);
     }
 
     for (; nalt > 0; --nalt) {
-        append_token(&write, TYPE_ALTERNATIVE);
+        token_append(&write, TYPE_ALTERNATIVE);
     }
 
     return r;
@@ -228,7 +230,7 @@ struct state *state(enum state_type type, struct state *o1, struct state *o2) {
     return s;
 }
 
-void mark_states(struct state *s) {
+void state_mark_recursive(struct state *s) {
     if (!s || s == &matchstate) {
         return;
     }
@@ -243,34 +245,34 @@ void mark_states(struct state *s) {
         s->o2 = NULL;
     }
 
-    mark_states(s->o1);
-    mark_states(s->o2);
+    state_mark_recursive(s->o1);
+    state_mark_recursive(s->o2);
 }
 
-void free_state_recursive(struct state *s) {
+void state_free_recursive(struct state *s) {
     if (!s || s == &matchstate) {
         return;
     }
 
-    free_state_recursive(s->o1);
-    free_state_recursive(s->o2);
+    state_free_recursive(s->o1);
+    state_free_recursive(s->o2);
     free(s);
 }
 
-void free_state(struct state *s) {
-    mark_states(s);
+void state_free(struct state *s) {
+    state_mark_recursive(s);
 
-    free_state_recursive(s);
+    state_free_recursive(s);
 }
 
-struct ptrlist *list1(struct state **s) {
+struct ptrlist *ptrlist_alloc(struct state **s) {
     struct ptrlist *l = malloc(sizeof(*l));
     l->s = s;
     l->next = NULL;
     return l;
 }
 
-void patch(struct ptrlist *l, struct state *s) {
+void ptrlist_patch(struct ptrlist *l, struct state *s) {
     struct ptrlist *next;
     for (struct ptrlist *i = l; i; i = next) {
         next = i->next;
@@ -279,7 +281,7 @@ void patch(struct ptrlist *l, struct state *s) {
     }
 }
 
-struct ptrlist *append(struct ptrlist *l1, struct ptrlist *l2) {
+struct ptrlist *ptrlist_concat(struct ptrlist *l1, struct ptrlist *l2) {
     struct ptrlist *oldl1 = l1;
 
     while (l1->next) {
@@ -297,11 +299,11 @@ struct frag *frag(struct state *start, struct ptrlist *out, struct frag *prev) {
     return frag;
 }
 
-void push_frag(struct frag **stackp, struct state *start, struct ptrlist *out) {
+void frag_push(struct frag **stackp, struct state *start, struct ptrlist *out) {
     *stackp = frag(start, out, *stackp);
 }
 
-struct frag pop_frag(struct frag **stackp) {
+struct frag frag_pop(struct frag **stackp) {
     struct frag frag = **stackp;
     free(*stackp);
     *stackp = frag.prev;
@@ -314,7 +316,7 @@ struct state *token2nfa(struct regex_token *token) {
         return NULL;
     }
 
-    struct frag *stackp = NULL,
+    struct frag *stack = NULL,
                 e1, e2;
     struct state *s;
 
@@ -323,72 +325,81 @@ struct state *token2nfa(struct regex_token *token) {
         case TYPE_ATOM:
             s = state(STATE_ATOM, NULL, NULL);
             memcpy(s->atom, token->atom, BITNSLOTS(256));
-            push_frag(&stackp, s, list1(&s->o1));
+            frag_push(&stack, s, ptrlist_alloc(&s->o1));
             break;
         case TYPE_CONCAT:
-            e2 = pop_frag(&stackp);
-            e1 = pop_frag(&stackp);
-            patch(e1.out, e2.start);
-            push_frag(&stackp, e1.start, e2.out);
+            e2 = frag_pop(&stack);
+            e1 = frag_pop(&stack);
+            ptrlist_patch(e1.out, e2.start);
+            frag_push(&stack, e1.start, e2.out);
             break;
         case TYPE_ALTERNATIVE:
-            e2 = pop_frag(&stackp);
-            e1 = pop_frag(&stackp);
+            e2 = frag_pop(&stack);
+            e1 = frag_pop(&stack);
             s = state(STATE_SPLIT, e1.start, e2.start);
-            push_frag(&stackp, s, append(e1.out, e2.out));
+            frag_push(&stack, s, ptrlist_concat(e1.out, e2.out));
             break;
         case TYPE_ZERO_MANY:
-            e1 = pop_frag(&stackp);
+            e1 = frag_pop(&stack);
             s = state(STATE_SPLIT, e1.start, NULL);
-            patch(e1.out, s);
-            push_frag(&stackp, s, list1(&s->o2));
+            ptrlist_patch(e1.out, s);
+            frag_push(&stack, s, ptrlist_alloc(&s->o2));
             break;
         case TYPE_ONE_MANY:
-            e1 = pop_frag(&stackp);
+            e1 = frag_pop(&stack);
             s = state(STATE_SPLIT, e1.start, NULL);
-            patch(e1.out, s);
-            push_frag(&stackp, e1.start, list1(&s->o2));
+            ptrlist_patch(e1.out, s);
+            frag_push(&stack, e1.start, ptrlist_alloc(&s->o2));
             break;
         case TYPE_ZERO_ONE:
-            e1 = pop_frag(&stackp);
+            e1 = frag_pop(&stack);
             s = state(STATE_SPLIT, e1.start, NULL);
-            push_frag(&stackp, s, append(e1.out, list1(&s->o2)));
+            frag_push(&stack, s, ptrlist_concat(e1.out, ptrlist_alloc(&s->o2)));
             break;
         }
     }
 
-    e1 = pop_frag(&stackp);
-    if (stackp) {
+    e1 = frag_pop(&stack);
+    if (stack) {
         // TODO: free everything
         return NULL;
     }
 
-    patch(e1.out, &matchstate);
+    ptrlist_patch(e1.out, &matchstate);
     return e1.start;
 }
 
 regex_t *regex_compile(char const *pattern) {
     struct regex_token *token = tokenise(pattern);
+    if (!token) {
+        return NULL;
+    }
+
     struct state *state = token2nfa(token);
-    free_token(token);
+    token_free(token);
+
+    if (!state) {
+        return NULL;
+    }
+
     regex_t *re = malloc(sizeof(*re));
     re->entry = state;
     return re;
 }
 
 void regex_free(regex_t *re) {
-    free_state(re->entry);
+    state_free(re->entry);
     free(re);
 }
 
-void prepend(struct state_list **l, struct state *s) {
+void state_list_prepend(struct state_list **l, struct state *s) {
     struct state_list *nl = malloc(sizeof(*nl));
     nl->s = s;
     nl->next = *l;
     *l = nl;
 }
 
-void free_list(struct state_list *clist) {
+void state_list_free(struct state_list *clist) {
     while (clist) {
         struct state_list *next = clist->next;
         free(clist);
@@ -396,48 +407,48 @@ void free_list(struct state_list *clist) {
     }
 }
 
-void addstate(struct state_list **l, struct state *s) {
-    if (!s){
+void state_list_add(struct state_list **l, struct state *s) {
+    if (!s) {
         return;
     }
 
     if (s->type == STATE_SPLIT) {
-        addstate(l, s->o1);
-        addstate(l, s->o2);
+        state_list_add(l, s->o1);
+        state_list_add(l, s->o2);
         return;
     }
 
-    prepend(l, s);
+    state_list_prepend(l, s);
 }
 
 void step(struct state_list *clist, int c, struct state_list **nlist) {
     for (; clist; clist = clist->next) {
         struct state *s = clist->s;
         if (s->type == STATE_ATOM && BITTEST(s->atom, c)) {
-            addstate(nlist, s->o1);
+            state_list_add(nlist, s->o1);
         }
     }
 }
 
 int regex_match(regex_t *re, char const *s) {
     struct state_list *clist = NULL;
-    prepend(&clist, re->entry);
+    state_list_prepend(&clist, re->entry);
 
     for (; *s; ++s) {
         struct state_list *nlist = NULL;
         step(clist, *s, &nlist);
-        free_list(clist);
+        state_list_free(clist);
         clist = nlist;
     }
 
     for (; clist; clist = clist->next) {
         if (clist->s->type == STATE_MATCH) {
-            free_list(clist);
+            state_list_free(clist);
             return 1;
         }
     }
 
-    free_list(clist);
+    state_list_free(clist);
 
     return 0;
 }

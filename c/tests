@@ -25,6 +25,15 @@ match hM
 match hmm
 match hMm
 
+# test \
+regex \(a
+match (a
+differ a
+
+regex \\a
+match \a
+differ a
+
 # test []
 regex [abc]+
 match a
