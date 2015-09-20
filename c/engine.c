@@ -369,11 +369,12 @@ void state_mark_recursive(struct state *s) {
         s->o1 = NULL;
     }
 
+    state_mark_recursive(s->o1);
+
     if (s->o2 && s->o2->type == STATE_MARK) {
         s->o2 = NULL;
     }
 
-    state_mark_recursive(s->o1);
     state_mark_recursive(s->o2);
 }
 
@@ -389,7 +390,6 @@ void state_free_recursive(struct state *s) {
 
 void state_free(struct state *s) {
     state_mark_recursive(s);
-
     state_free_recursive(s);
 }
 
