@@ -1,0 +1,9 @@
+* [a-z]{-}[aoeui]
+* r{2} r{2,} r{2,5} r{,5}
+* \123 (octal)
+* \xff (hex)
+* (?isx:…) (i = case insensitive; s = . matches newlines; x = ignore whitespace unless escaped)
+* (?-isx:…)
+* (?# comment)
+* ^r
+* r$
