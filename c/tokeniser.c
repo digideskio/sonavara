@@ -78,7 +78,10 @@ struct tokeniser {
 };
 
 int tokenise_default(struct tokeniser *sp, int c);
-int tokenise_cclass(struct tokeniser *sp, int c);
+int tokenise_escape(struct tokeniser *sp, int c);
+int tokenise_cclass_start(struct tokeniser *sp, int c);
+int tokenise_cclass_mid(struct tokeniser *sp, int c);
+int tokenise_cclass_range(struct tokeniser *sp, int c);
 
 struct regex_token *tokenise(char const *pattern) {
     struct regex_token *r = NULL;
@@ -101,49 +104,19 @@ struct regex_token *tokenise(char const *pattern) {
             break;
 
         case ESCAPE:
-            s.state = DEFAULT;
-
-            if (s.natom > 1) {
-                --s.natom;
-                token_append(&s.write, TYPE_CONCAT);
-            }
-
-            memset(atom, 0, BITNSLOTS(256));
-            v = process_escape(v);
-            BITSET(atom, v);
-
-            token_append_atom(&s.write, atom);
-            ++s.natom;
+            abort = !tokenise_escape(&s, v);
             break;
 
         case CCLASS_START:
-            s.state = CCLASS_MID;
-
-            if (v == '^') {
-                s.cclass_negated = 1;
-                break;
-            }
-
-            goto cclass_mid;
+            abort = !tokenise_cclass_start(&s, v);
+            break;
 
         case CCLASS_MID:
-cclass_mid:
-            abort = !tokenise_cclass(&s, v);
+            abort = !tokenise_cclass_mid(&s, v);
             break;
 
         case CCLASS_RANGE:
-            if (v == ']') {
-                BITSET(s.cclass_atom, v);
-                goto cclass_mid;
-            }
-
-            for (int i = s.cclass_last; i <= v; ++i) {
-                BITSET(s.cclass_atom, i);
-            }
-
-            s.cclass_last = 0;
-            s.state = CCLASS_MID;
-
+            abort = !tokenise_cclass_range(&s, v);
             break;
 
         case CCLASS_ESCAPE:
@@ -293,7 +266,38 @@ int tokenise_default(struct tokeniser *sp, int v) {
     return 1;
 }
 
-int tokenise_cclass(struct tokeniser *sp, int v) {
+int tokenise_escape(struct tokeniser *sp, int v) {
+    sp->state = DEFAULT;
+
+    if (sp->natom > 1) {
+        --sp->natom;
+        token_append(&sp->write, TYPE_CONCAT);
+    }
+
+    unsigned char atom[256];
+
+    memset(atom, 0, BITNSLOTS(256));
+    v = process_escape(v);
+    BITSET(atom, v);
+
+    token_append_atom(&sp->write, atom);
+    ++sp->natom;
+
+    return 1;
+}
+
+int tokenise_cclass_start(struct tokeniser *sp, int v) {
+    sp->state = CCLASS_MID;
+
+    if (v == '^') {
+        sp->cclass_negated = 1;
+        return 1;
+    }
+
+    return tokenise_cclass_mid(sp, v);
+}
+
+int tokenise_cclass_mid(struct tokeniser *sp, int v) {
     switch (v) {
     case '\\':
         sp->state = CCLASS_ESCAPE;
@@ -331,6 +335,21 @@ int tokenise_cclass(struct tokeniser *sp, int v) {
         break;
     }
 
+    return 1;
+}
+
+int tokenise_cclass_range(struct tokeniser *sp, int v) {
+    if (v == ']') {
+        BITSET(sp->cclass_atom, v);
+        return tokenise_cclass_mid(sp, v);
+    }
+
+    for (int i = sp->cclass_last; i <= v; ++i) {
+        BITSET(sp->cclass_atom, i);
+    }
+
+    sp->cclass_last = 0;
+    sp->state = CCLASS_MID;
     return 1;
 }
 
