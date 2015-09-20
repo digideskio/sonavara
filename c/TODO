@@ -4,7 +4,7 @@
 * \xff (hex)
 * (?isx:…) (i = case insensitive; s = . matches newlines; x = ignore whitespace unless escaped)
 * (?-isx:…)
-
 * (?# comment)
+
 * ^r
 * r$

@@ -1,5 +1,6 @@
 SRCS := $(wildcard *.c)
 OBJS := $(SRCS:%.c=obj/%.o)
+DEPS := $(OBJS:obj/%.o=obj/%.d)
 
 all: test
 	valgrind --dsymutil=yes --leak-check=full ./test
@@ -7,11 +8,13 @@ all: test
 test: obj/libengine.a obj/test.o
 	$(CC) -o $@ $^
 
-obj/libengine.a: obj/engine.o
+obj/libengine.a: obj/engine.o obj/tokeniser.o
 	$(AR) rcs $@ $^
 
+-include $(DEPS)
+
 obj/%.o: %.c
-	$(CC) -g -c -o $@ $^
+	$(CC) -g -c -o $@ -MMD $^
 
 clean:
-	-rm engine $(OBJS)
+	-rm test $(OBJS) $(DEPS)
