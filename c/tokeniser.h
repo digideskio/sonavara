@@ -1,6 +1,8 @@
 #ifndef TOKENISER_H
 #define TOKENISER_H
 
+#include <limits.h>
+
 #define BITMASK(b) (1 << ((b) % CHAR_BIT))
 #define BITSLOT(b) ((b) / CHAR_BIT)
 #define BITSET(a, b) ((a)[BITSLOT(b)] |= BITMASK(b))

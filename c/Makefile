@@ -8,13 +8,13 @@ all: test
 test: obj/libengine.a obj/test.o
 	$(CC) -o $@ $^
 
-obj/libengine.a: obj/engine.o obj/tokeniser.o
+obj/libengine.a: obj/tokeniser.o obj/nfa.o obj/engine.o
 	$(AR) rcs $@ $^
 
 -include $(DEPS)
 
 obj/%.o: %.c
-	$(CC) -g -c -o $@ -MMD $^
+	$(CC) -g -c -o $@ -MMD $<
 
 clean:
 	-rm test $(OBJS) $(DEPS)
