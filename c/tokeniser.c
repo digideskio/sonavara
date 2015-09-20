@@ -412,17 +412,27 @@ int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
         // the token stream.
 
         if (brace_low == 0 && brace_high == -1) {
-            process(sp, "*", NULL);
+            if (!process(sp, "*", NULL)) {
+                return 0;
+            }
         } else if (brace_low == 1 && brace_high == -1) {
-            process(sp, "+", NULL);
+            if (!process(sp, "+", NULL)) {
+                return 0;
+            }
         } else if (brace_high == -1) {
             for (int i = 1; i < brace_low; ++i) {
-                process(sp, last, brace_start);
+                if (!process(sp, last, brace_start)) {
+                    return 0;
+                }
             }
-            process(sp, "+", NULL);
+            if (!process(sp, "+", NULL)) {
+                return 0;
+            }
         } else {
             if (brace_low == 0) {
-                process(sp, "?", NULL);
+                if (!process(sp, "?", NULL)) {
+                    return 0;
+                }
                 --brace_high;
             }
 
@@ -433,8 +443,12 @@ int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
             }
 
             for (int i = brace_low; i < brace_high; ++i) {
-                process(sp, last, brace_start);
-                process(sp, "?", NULL);
+                if (!process(sp, last, brace_start)) {
+                    return 0;
+                }
+                if (!process(sp, "?", NULL)) {
+                    return 0;
+                }
             }
         }
 
