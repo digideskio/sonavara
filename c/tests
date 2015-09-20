@@ -186,6 +186,11 @@ match ab
 differ abb
 differ bc
 
+regex [ab]{,}
+match 
+match a
+match abababa
+
 
 # test (?:)
 regex (?i:[a-z])

@@ -1,3 +1,5 @@
+#include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -6,6 +8,7 @@
 struct paren {
     int nalt;
     int natom;
+    char const *last;
     struct paren *prev;
 };
 
@@ -32,7 +35,6 @@ void token_free(struct regex_token *token) {
     }
 }
 
-
 void paren_free(struct paren *paren) {
     while (paren) {
         struct paren *prev = paren->prev;
@@ -57,7 +59,8 @@ int process_escape(int v) {
 
 enum tokeniser_state {
     DEFAULT,
-    BRACE,
+    BRACE_PRE_COMMA,
+    BRACE_POST_COMMA,
     BRACE_CCLASS_SUBTRACT,
     ESCAPE,
     CCLASS_START,
@@ -74,6 +77,11 @@ struct tokeniser {
     struct paren *paren;
     int natom;
     int nalt;
+    char const *last;
+
+    char const *brace_start;
+    int brace_low;
+    int brace_high;
 
     int cclass_negated;
     int cclass_last;
@@ -82,8 +90,11 @@ struct tokeniser {
     unsigned char cclass_atom_parent[BITNSLOTS(256)];
 };
 
-int tokenise_default(struct tokeniser *sp, int v);
+int process(struct tokeniser *sp, char const *pattern, char const *stop);
+int tokenise_default(struct tokeniser *sp, char const *pattern);
 int tokenise_escape(struct tokeniser *sp, int v);
+int tokenise_brace_pre_comma(struct tokeniser *sp, int v);
+int tokenise_brace_post_comma(struct tokeniser *sp, int v);
 int tokenise_cclass_start(struct tokeniser *sp, int v);
 int tokenise_cclass_mid(struct tokeniser *sp, int v);
 int tokenise_cclass_range(struct tokeniser *sp, int v);
@@ -99,65 +110,10 @@ struct regex_token *tokenise(char const *pattern) {
     s.state = DEFAULT;
     s.write = &r;
 
-    unsigned char atom[BITNSLOTS(256)];
-
-    for (; *pattern; ++pattern) {
-        int abort = 0,
-            v = *pattern;
-
-        switch (s.state) {
-        case DEFAULT:
-            abort = !tokenise_default(&s, v);
-            break;
-
-        case BRACE:
-            abort = 1;
-            break;
-
-        case BRACE_CCLASS_SUBTRACT:
-            if (v != '[') {
-                abort = 1;
-                break;
-            }
-
-            memcpy(s.cclass_atom_parent, s.cclass_atom, BITNSLOTS(256));
-            abort = !tokenise_default(&s, v);
-            s.cclass_subtract = 1;
-
-            break;
-
-        case ESCAPE:
-            abort = !tokenise_escape(&s, v);
-            break;
-
-        case CCLASS_START:
-            abort = !tokenise_cclass_start(&s, v);
-            break;
-
-        case CCLASS_MID:
-            abort = !tokenise_cclass_mid(&s, v);
-            break;
-
-        case CCLASS_RANGE:
-            abort = !tokenise_cclass_range(&s, v);
-            break;
-
-        case CCLASS_ESCAPE:
-            s.state = CCLASS_MID;
-            v = process_escape(v);
-            BITSET(s.cclass_atom, v);
-            break;
-
-        case CCLASS_POST:
-            abort = !tokenise_cclass_post(&s, &pattern);
-            break;
-        }
-
-        if (abort) {
-            paren_free(s.paren);
-            token_free(r);
-            return NULL;
-        }
+    if (!process(&s, pattern, NULL)) {
+        paren_free(s.paren);
+        token_free(r);
+        return NULL;
     }
 
     if (s.paren) {
@@ -186,16 +142,87 @@ struct regex_token *tokenise(char const *pattern) {
     return r;
 }
 
-int tokenise_default(struct tokeniser *sp, int v) {
+int process(struct tokeniser *sp, char const *pattern, char const *stop) {
     unsigned char atom[BITNSLOTS(256)];
 
-    switch (v) {
+    for (; pattern != stop && *pattern; ++pattern) {
+        int abort = 0,
+            v = *pattern;
+
+        switch (sp->state) {
+        case DEFAULT:
+            abort = !tokenise_default(sp, pattern);
+            break;
+
+        case BRACE_PRE_COMMA:
+            abort = !tokenise_brace_pre_comma(sp, v);
+            break;
+
+        case BRACE_POST_COMMA:
+            abort = !tokenise_brace_post_comma(sp, v);
+            break;
+
+        case BRACE_CCLASS_SUBTRACT:
+            if (v != '[') {
+                abort = 1;
+                break;
+            }
+
+            memcpy(sp->cclass_atom_parent, sp->cclass_atom, BITNSLOTS(256));
+            abort = !tokenise_default(sp, pattern);
+            sp->cclass_subtract = 1;
+
+            break;
+
+        case ESCAPE:
+            abort = !tokenise_escape(sp, v);
+            break;
+
+        case CCLASS_START:
+            abort = !tokenise_cclass_start(sp, v);
+            break;
+
+        case CCLASS_MID:
+            abort = !tokenise_cclass_mid(sp, v);
+            break;
+
+        case CCLASS_RANGE:
+            abort = !tokenise_cclass_range(sp, v);
+            break;
+
+        case CCLASS_ESCAPE:
+            sp->state = CCLASS_MID;
+            v = process_escape(v);
+            BITSET(sp->cclass_atom, v);
+            break;
+
+        case CCLASS_POST:
+            abort = !tokenise_cclass_post(sp, &pattern);
+            break;
+        }
+
+        if (abort) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int tokenise_default(struct tokeniser *sp, char const *pattern) {
+    unsigned char atom[BITNSLOTS(256)];
+
+    switch (*pattern) {
     case '{':
-        sp->state = BRACE;
+        sp->state = BRACE_PRE_COMMA;
+        sp->brace_low = -1;
+        sp->brace_high = -1;
+        sp->brace_start = pattern;
         break;
 
     case '\\':
         sp->state = ESCAPE;
+        sp->last = pattern;
         break;
 
     case '[':
@@ -204,6 +231,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
         sp->cclass_last = 0;
         sp->cclass_subtract = 0;
         memset(sp->cclass_atom, 0, BITNSLOTS(256));
+        sp->last = pattern;
         break;
 
     case '(':
@@ -215,11 +243,13 @@ int tokenise_default(struct tokeniser *sp, int v) {
         struct paren *new_paren = malloc(sizeof(*new_paren));
         new_paren->nalt = sp->nalt;
         new_paren->natom = sp->natom;
+        new_paren->last = pattern;
         new_paren->prev = sp->paren;
         sp->paren = new_paren;
 
         sp->nalt = 0;
         sp->natom = 0;
+        sp->last = 0;
         break;
 
     case ')':
@@ -237,6 +267,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
 
         sp->nalt = sp->paren->nalt;
         sp->natom = sp->paren->natom;
+        sp->last = sp->paren->last;
         struct paren *old_paren = sp->paren->prev;
         free(sp->paren);
         sp->paren = old_paren;
@@ -253,6 +284,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
             token_append(&sp->write, TYPE_CONCAT);
         }
         ++sp->nalt;
+        sp->last = 0;
         break;
 
     case '*':
@@ -260,6 +292,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
             return 0;
         }
         token_append(&sp->write, TYPE_ZERO_MANY);
+        sp->last = 0;
         break;
 
     case '+':
@@ -267,6 +300,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
             return 0;
         }
         token_append(&sp->write, TYPE_ONE_MANY);
+        sp->last = 0;
         break;
 
     case '?':
@@ -274,6 +308,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
             return 0;
         }
         token_append(&sp->write, TYPE_ZERO_ONE);
+        sp->last = 0;
         break;
 
     case '.':
@@ -285,6 +320,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
         BITCLEAR(atom, '\n');
         token_append_atom(&sp->write, atom);
         ++sp->natom;
+        sp->last = pattern;
         break;
 
     default:
@@ -293,9 +329,10 @@ int tokenise_default(struct tokeniser *sp, int v) {
             token_append(&sp->write, TYPE_CONCAT);
         }
         memset(atom, 0, BITNSLOTS(256));
-        BITSET(atom, v);
+        BITSET(atom, *pattern);
         token_append_atom(&sp->write, atom);
         ++sp->natom;
+        sp->last = pattern;
         break;
     }
 
@@ -319,6 +356,57 @@ int tokenise_escape(struct tokeniser *sp, int v) {
     token_append_atom(&sp->write, atom);
     ++sp->natom;
 
+    return 1;
+}
+
+int tokenise_brace_pre_comma(struct tokeniser *sp, int v) {
+    if (v == ',') {
+        sp->state = BRACE_POST_COMMA;
+        return 1;
+    }
+
+    if (v == '}') {
+        if (sp->brace_low == -1) {
+            return 0;
+        }
+
+        // TODO: Repeat sp->brace_low times.
+        fprintf(stderr, "REPEAT EXACTLY %d\n", sp->brace_low);
+        sp->state = DEFAULT;
+        return 1;
+    }
+
+    if (!isdigit(v)) {
+        return 0;
+    }
+
+    if (sp->brace_low == -1) {
+        sp->brace_low = 0;
+    }
+
+    sp->brace_low = (sp->brace_low * 10) + (v - '0');
+    return 1;
+}
+
+int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
+    if (v == '}') {
+        // TODO: repeat sp->brace_low (may be -1) up to sp->brace_high (may be -1)
+        // times.
+        sp->state = DEFAULT;
+        fprintf(stderr, "REPEAT FROM %d,%d\n", sp->brace_low, sp->brace_high);
+        return 1;
+    }
+
+    if (!isdigit(v)) {
+        return 0;
+    }
+
+
+    if (sp->brace_high == -1) {
+        sp->brace_high = 0;
+    }
+
+    sp->brace_high = (sp->brace_high * 10) + (v - '0');
     return 1;
 }
 
@@ -400,7 +488,7 @@ int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
 
     cclass_post_cleanup(sp);
 
-    return tokenise_default(sp, **pattern);
+    return tokenise_default(sp, *pattern);
 }
 
 void cclass_post_cleanup(struct tokeniser *sp) {
