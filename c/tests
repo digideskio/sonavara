@@ -96,6 +96,13 @@ regex a]
 match a]
 differ a
 
+regex [^A-Z]
+match a
+differ A
+match m
+differ M
+match !
+match /
 
 # test .
 regex .

@@ -110,6 +110,8 @@ struct regex_token *tokenise(char const *pattern) {
     int nalt = 0;
     int escape = 0;
     int cclass = 0;
+    int cclass_any = 0;
+    int cclass_negated = 0;
     int cclass_last = 0;
     int cclass_range = 0;
 
@@ -117,43 +119,55 @@ struct regex_token *tokenise(char const *pattern) {
 
     for (; *pattern; ++pattern) {
         if (cclass) {
-            switch (*pattern) {
-            case ']':
-                if (cclass_range) {
-                    BITSET(atom, (int) '-');
-                }
-                    
-                cclass = 0;
-                if (natom > 1) {
-                    --natom;
-                    token_append(&write, TYPE_CONCAT);
-                }
-                token_append_atom(&write, atom);
-                ++natom;
-                break;
-
-            case '-':
-                if (!cclass_last) {
-                    cclass_last = (int) '-';
-                    BITSET(atom, cclass_last);
-                } else {
-                    cclass_range = 1;
-                }
-                break;
-
-            default:
-                if (cclass_range) {
-                    for (int i = cclass_last; i <= (int) *pattern; ++i) {
-                        BITSET(atom, i);
+            if (!cclass_any && *pattern == '^') {
+                cclass_negated = 1;
+            } else {
+                switch (*pattern) {
+                case ']':
+                    if (cclass_range) {
+                        BITSET(atom, (int) '-');
                     }
-                    cclass_last = (int) *pattern;
-                    cclass_range = 0;
-                } else {
-                    cclass_last = (int) *pattern;
-                    BITSET(atom, cclass_last);
+
+                    if (cclass_negated) {
+                        for (int i = 0; i < BITNSLOTS(256); ++i) {
+                            atom[i] = ~atom[i];
+                        }
+                    }
+                        
+                    cclass = 0;
+                    if (natom > 1) {
+                        --natom;
+                        token_append(&write, TYPE_CONCAT);
+                    }
+                    token_append_atom(&write, atom);
+                    ++natom;
+                    break;
+
+                case '-':
+                    if (!cclass_last) {
+                        cclass_last = (int) '-';
+                        BITSET(atom, cclass_last);
+                    } else {
+                        cclass_range = 1;
+                    }
+                    break;
+
+                default:
+                    if (cclass_range) {
+                        for (int i = cclass_last; i <= (int) *pattern; ++i) {
+                            BITSET(atom, i);
+                        }
+                        cclass_last = (int) *pattern;
+                        cclass_range = 0;
+                    } else {
+                        cclass_last = (int) *pattern;
+                        BITSET(atom, cclass_last);
+                    }
+                    break;
                 }
-                break;
             }
+
+            cclass_any = 1;
             continue;
         }
 
@@ -177,6 +191,8 @@ struct regex_token *tokenise(char const *pattern) {
 
         case '[':
             cclass = 1;
+            cclass_any = 0;
+            cclass_negated = 0;
             cclass_range = 0;
             cclass_last = 0;
             memset(atom, 0, BITNSLOTS(256));
