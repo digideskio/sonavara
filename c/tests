@@ -57,4 +57,37 @@ match aaa
 match acbbac
 differ abdc
 
+regex [a-z]
+match a
+match b
+match r
+differ M
+match z
+
+regex [a-zA-Z]
+match M
+match m
+differ mm
+
+regex [a-z-]
+match a
+match m
+match z
+match -
+differ M
+differ .
+
+regex [-a-z]
+match a
+match m
+match z
+match -
+differ M
+differ .
+
+regex 0x[a-fA-F0-9]+
+match 0xAB109
+differ heh
+differ 0xy
+
 noregex [ab
