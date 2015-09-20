@@ -57,11 +57,14 @@ int process_escape(int v) {
 
 enum tokeniser_state {
     DEFAULT,
+    BRACE,
+    BRACE_CCLASS_SUBTRACT,
     ESCAPE,
     CCLASS_START,
     CCLASS_MID,
     CCLASS_RANGE,
     CCLASS_ESCAPE,
+    CCLASS_POST,
 };
 
 struct tokeniser {
@@ -74,14 +77,18 @@ struct tokeniser {
 
     int cclass_negated;
     int cclass_last;
+    int cclass_subtract;
     unsigned char cclass_atom[BITNSLOTS(256)];
+    unsigned char cclass_atom_parent[BITNSLOTS(256)];
 };
 
-int tokenise_default(struct tokeniser *sp, int c);
-int tokenise_escape(struct tokeniser *sp, int c);
-int tokenise_cclass_start(struct tokeniser *sp, int c);
-int tokenise_cclass_mid(struct tokeniser *sp, int c);
-int tokenise_cclass_range(struct tokeniser *sp, int c);
+int tokenise_default(struct tokeniser *sp, int v);
+int tokenise_escape(struct tokeniser *sp, int v);
+int tokenise_cclass_start(struct tokeniser *sp, int v);
+int tokenise_cclass_mid(struct tokeniser *sp, int v);
+int tokenise_cclass_range(struct tokeniser *sp, int v);
+int tokenise_cclass_post(struct tokeniser *sp, char const **pattern);
+void cclass_post_cleanup(struct tokeniser *sp);
 
 struct regex_token *tokenise(char const *pattern) {
     struct regex_token *r = NULL;
@@ -101,6 +108,22 @@ struct regex_token *tokenise(char const *pattern) {
         switch (s.state) {
         case DEFAULT:
             abort = !tokenise_default(&s, v);
+            break;
+
+        case BRACE:
+            abort = 1;
+            break;
+
+        case BRACE_CCLASS_SUBTRACT:
+            if (v != '[') {
+                abort = 1;
+                break;
+            }
+
+            memcpy(s.cclass_atom_parent, s.cclass_atom, BITNSLOTS(256));
+            abort = !tokenise_default(&s, v);
+            s.cclass_subtract = 1;
+
             break;
 
         case ESCAPE:
@@ -124,6 +147,10 @@ struct regex_token *tokenise(char const *pattern) {
             v = process_escape(v);
             BITSET(s.cclass_atom, v);
             break;
+
+        case CCLASS_POST:
+            abort = !tokenise_cclass_post(&s, &pattern);
+            break;
         }
 
         if (abort) {
@@ -137,6 +164,10 @@ struct regex_token *tokenise(char const *pattern) {
         paren_free(s.paren);
         token_free(r);
         return NULL;
+    }
+
+    if (s.state == CCLASS_POST) {
+        cclass_post_cleanup(&s);
     }
 
     if (s.state != DEFAULT) {
@@ -159,6 +190,10 @@ int tokenise_default(struct tokeniser *sp, int v) {
     unsigned char atom[BITNSLOTS(256)];
 
     switch (v) {
+    case '{':
+        sp->state = BRACE;
+        break;
+
     case '\\':
         sp->state = ESCAPE;
         break;
@@ -167,6 +202,7 @@ int tokenise_default(struct tokeniser *sp, int v) {
         sp->state = CCLASS_START;
         sp->cclass_negated = 0;
         sp->cclass_last = 0;
+        sp->cclass_subtract = 0;
         memset(sp->cclass_atom, 0, BITNSLOTS(256));
         break;
 
@@ -304,20 +340,22 @@ int tokenise_cclass_mid(struct tokeniser *sp, int v) {
         break;
 
     case ']':
-        sp->state = DEFAULT;
+        sp->state = CCLASS_POST;
 
         if (sp->cclass_negated) {
             for (int i = 0; i < BITNSLOTS(256); ++i) {
                 sp->cclass_atom[i] = ~sp->cclass_atom[i];
             }
         }
-            
-        if (sp->natom > 1) {
-            --sp->natom;
-            token_append(&sp->write, TYPE_CONCAT);
+
+        if (sp->cclass_subtract) {
+            for (int i = 0; i < 256; ++i) {
+                if (BITTEST(sp->cclass_atom, i)) {
+                    BITCLEAR(sp->cclass_atom_parent, i);
+                }
+            }
+            memcpy(sp->cclass_atom, sp->cclass_atom_parent, BITNSLOTS(256));
         }
-        token_append_atom(&sp->write, sp->cclass_atom);
-        ++sp->natom;
         break;
 
     case '-':
@@ -351,6 +389,29 @@ int tokenise_cclass_range(struct tokeniser *sp, int v) {
     sp->cclass_last = 0;
     sp->state = CCLASS_MID;
     return 1;
+}
+
+int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
+    if (strncmp(*pattern, "{-}", 3) == 0) {
+        *pattern += 2;
+        sp->state = BRACE_CCLASS_SUBTRACT;
+        return 1;
+    }
+
+    cclass_post_cleanup(sp);
+
+    return tokenise_default(sp, **pattern);
+}
+
+void cclass_post_cleanup(struct tokeniser *sp) {
+    if (sp->natom > 1) {
+        --sp->natom;
+        token_append(&sp->write, TYPE_CONCAT);
+    }
+
+    token_append_atom(&sp->write, sp->cclass_atom);
+    ++sp->natom;
+    sp->state = DEFAULT;
 }
 
 /* vim: set sw=4 et: */
