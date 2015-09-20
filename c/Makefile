@@ -14,7 +14,7 @@ obj/libengine.a: obj/tokeniser.o obj/nfa.o obj/engine.o
 -include $(DEPS)
 
 obj/%.o: %.c
-	$(CC) -g -c -o $@ -MMD $<
+	$(CC) -Wall -g -c -o $@ -MMD $<
 
 clean:
 	-rm test $(OBJS) $(DEPS)

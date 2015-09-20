@@ -145,6 +145,7 @@ struct regex_token *tokenise(char const *pattern) {
 int process(struct tokeniser *sp, char const *pattern, char const *stop) {
     unsigned char atom[BITNSLOTS(256)];
 
+
     for (; pattern != stop && *pattern; ++pattern) {
         int abort = 0,
             v = *pattern;
@@ -370,9 +371,18 @@ int tokenise_brace_pre_comma(struct tokeniser *sp, int v) {
             return 0;
         }
 
-        // TODO: Repeat sp->brace_low times.
-        fprintf(stderr, "REPEAT EXACTLY %d\n", sp->brace_low);
         sp->state = DEFAULT;
+
+        char const *last = sp->last,
+             *brace_start = sp->brace_start;
+        int brace_low = sp->brace_low;
+
+        for (int i = 0; i < brace_low - 1; ++i) {
+            if (!process(sp, last, brace_start)) {
+                return 0;
+            }
+        }
+
         return 1;
     }
 
@@ -390,10 +400,45 @@ int tokenise_brace_pre_comma(struct tokeniser *sp, int v) {
 
 int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
     if (v == '}') {
-        // TODO: repeat sp->brace_low (may be -1) up to sp->brace_high (may be -1)
-        // times.
         sp->state = DEFAULT;
-        fprintf(stderr, "REPEAT FROM %d,%d\n", sp->brace_low, sp->brace_high);
+
+        char const *last = sp->last,
+             *brace_start = sp->brace_start;
+
+        int brace_low = sp->brace_low,
+            brace_high = sp->brace_high;
+
+        if (brace_low < 1 && brace_high == -1) {
+            tokenise_default(sp, "*");
+        } else if (brace_low == 1 && brace_high == -1) {
+            tokenise_default(sp, "+");
+        } else if (brace_high == -1) {
+            for (int i = 1; i < brace_low; ++i) {
+                process(sp, last, brace_start);
+            }
+            tokenise_default(sp, "+");
+        } else {
+
+            if (brace_low < 1) {
+                tokenise_default(sp, "?");
+                --brace_high;
+            }
+
+            for (int i = 1; i < brace_low; ++i) {
+                if (!process(sp, last, brace_start)) {
+                    return 0;
+                }
+            }
+
+            for (int i = brace_low; i < brace_high; ++i) {
+                process(sp, last, brace_start);
+            }
+
+            for (int i = brace_low; i < brace_high; ++i) {
+                tokenise_default(sp, "?");
+            }
+        }
+
         return 1;
     }
 

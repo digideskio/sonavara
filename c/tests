@@ -191,6 +191,18 @@ match
 match a
 match abababa
 
+regex (hmm){3}
+match hmmhmmhmm
+differ hmm
+differ hmmhmm
+differ hmmhmmhmmhmm
+
+regex (h(xm){2}){3}
+match hxmxmhxmxmhxmxm
+differ hxmxm
+differ hxmxmhxmxm
+differ hxmxmhxmxmhxmxmhxmxm
+
 
 # test (?:)
 regex (?i:[a-z])
