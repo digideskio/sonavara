@@ -52,6 +52,14 @@ noregex a\
 regex \r*
 match 
 
+regex \101\102
+match AB
+differ ab
+
+regex \x41\x42
+match AB
+differ ab
+
 # test []
 regex [abc]+
 match a
@@ -129,3 +137,62 @@ differ
 regex \.
 match .
 differ x
+
+# test {-}
+regex [a-z]{-}[aoeui]+
+match bcdfghjklmnpqrstvwxyz
+differ abcd
+differ efgh
+differ ijkl
+differ mnop
+differ uvwx
+match yz
+differ aoeui
+
+# test {}
+regex [ab]{2}
+match ab
+match bb
+match ba
+match aa
+differ aba
+differ a
+differ xy
+differ bx
+
+regex [ab]{2,}
+match bb
+differ b
+match bbb
+match babababababbabba
+
+regex [ab]{,2}
+match 
+match a
+match ab
+differ abb
+differ bc
+
+
+# test (?:)
+regex (?i:[a-z])
+match a
+match A
+
+regex (?i:(?-i:[a-z]))
+match a
+differ A
+
+regex (?s:.)
+match x
+matchnewline
+
+regex (?ix: o k a y  \   th(?-x: )EN )
+match okAY TH En
+differ o kAY TH En
+
+
+# test (#)
+regex ab.(# uhm, sure?! )e
+match abxe
+differ ab.(# uhm, sure?! )e
