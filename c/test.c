@@ -80,6 +80,18 @@ int main(int argc, char **argv) {
                     ++passed;
                 }
             }
+        } else if (strcmp(line, "matchnewline") == 0) {
+            if (!re) {
+                fprintf(stderr, "WARN: no regular expression for 'matchnewline'\n");
+                ++warning;
+            } else {
+                if (!regex_match(re, "\n")) {
+                    fprintf(stderr, "FAIL: /%s/ should match newline\n", re_str);
+                    ++failed;
+                } else {
+                    ++passed;
+                }
+            }
         } else if (strcmp(line, "differnewline") == 0) {
             if (!re) {
                 fprintf(stderr, "WARN: no regular expression for 'differnewline'\n");
