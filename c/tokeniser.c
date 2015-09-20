@@ -216,7 +216,7 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
     switch (*pattern) {
     case '{':
         sp->state = BRACE_PRE_COMMA;
-        sp->brace_low = -1;
+        sp->brace_low = 0;
         sp->brace_high = -1;
         sp->brace_start = pattern;
         break;
@@ -411,7 +411,7 @@ int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
         // Note that one instance of the to-be-repeated content is already on
         // the token stream.
 
-        if (brace_low < 1 && brace_high == -1) {
+        if (brace_low == 0 && brace_high == -1) {
             tokenise_default(sp, "*");
         } else if (brace_low == 1 && brace_high == -1) {
             tokenise_default(sp, "+");
@@ -421,7 +421,7 @@ int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
             }
             tokenise_default(sp, "+");
         } else {
-            if (brace_low < 1) {
+            if (brace_low == 0) {
                 tokenise_default(sp, "?");
                 --brace_high;
             }
