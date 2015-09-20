@@ -119,6 +119,7 @@ match a
 match !
 match \
 differ mm
+differnewline
 
 regex .+
 match aoeaonhteh nteuhar cHL<RH>L)(*G$ 

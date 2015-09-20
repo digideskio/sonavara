@@ -310,6 +310,7 @@ struct regex_token *tokenise(char const *pattern) {
                 token_append(&write, TYPE_CONCAT);
             }
             memset(atom, 0xff, BITNSLOTS(256));
+            BITCLEAR(atom, '\n');
             token_append_atom(&write, atom);
             ++natom;
             break;
