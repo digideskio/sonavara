@@ -155,6 +155,12 @@ differ uvwx
 match yz
 differ aoeui
 
+regex [a-z]{-}[aoeui]{-}[x]+
+match bcd
+differ a
+differ i
+differ x
+
 
 # test {}
 regex [ab]{2}
