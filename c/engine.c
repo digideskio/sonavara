@@ -101,6 +101,20 @@ void paren_free(struct regex_paren *paren) {
     }
 }
 
+int process_escape(int v) {
+    switch (v) {
+    case '0': v = '\0'; break;
+    case 'a': v = '\a'; break;
+    case 'b': v = '\b'; break;
+    case 'f': v = '\f'; break;
+    case 'n': v = '\n'; break;
+    case 'r': v = '\r'; break;
+    case 't': v = '\t'; break;
+    case 'v': v = '\v'; break;
+    }
+    return v;
+}
+
 struct regex_token *tokenise(char const *pattern) {
     struct regex_token *r = NULL,
                  **write = &r;
@@ -114,6 +128,7 @@ struct regex_token *tokenise(char const *pattern) {
     int cclass_negated = 0;
     int cclass_last = 0;
     int cclass_range = 0;
+    int cclass_escape = 0;
 
     unsigned char atom[BITNSLOTS(256)];
 
@@ -121,8 +136,15 @@ struct regex_token *tokenise(char const *pattern) {
         if (cclass) {
             if (!cclass_any && *pattern == '^') {
                 cclass_negated = 1;
+            } else if (cclass_escape) {
+                cclass_escape = 0;
+                int v = process_escape(*pattern);
+                BITSET(atom, v);
             } else {
                 switch (*pattern) {
+                case '\\':
+                    cclass_escape = 1;
+                    break;
                 case ']':
                     if (cclass_range) {
                         BITSET(atom, (int) '-');
@@ -177,8 +199,11 @@ struct regex_token *tokenise(char const *pattern) {
                 --natom;
                 token_append(&write, TYPE_CONCAT);
             }
+
             memset(atom, 0, BITNSLOTS(256));
-            BITSET(atom, (int) *pattern);
+            int v = process_escape(*pattern);
+            BITSET(atom, v);
+
             token_append_atom(&write, atom);
             ++natom;
             continue;
@@ -195,6 +220,7 @@ struct regex_token *tokenise(char const *pattern) {
             cclass_negated = 0;
             cclass_range = 0;
             cclass_last = 0;
+            cclass_escape = 0;
             memset(atom, 0, BITNSLOTS(256));
             break;
 

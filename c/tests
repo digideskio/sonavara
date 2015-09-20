@@ -49,6 +49,9 @@ differ a
 
 noregex a\
 
+regex \r*
+match 
+
 # test []
 regex [abc]+
 match a
@@ -103,6 +106,11 @@ match m
 differ M
 match !
 match /
+
+regex [a\t]+
+match aa
+match 		
+match a		a	
 
 # test .
 regex .
