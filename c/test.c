@@ -4,8 +4,6 @@
 
 #include "engine.h"
 
-     ssize_t getline(char ** restrict linep, size_t * restrict linecapp, FILE * restrict stream);
-
 int main(int argc, char **argv) {
     FILE *f = fopen("tests", "r");
     if (!f) {

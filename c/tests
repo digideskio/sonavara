@@ -91,3 +91,25 @@ differ heh
 differ 0xy
 
 noregex [ab
+
+regex a]
+match a]
+differ a
+
+
+# test .
+regex .
+differ 
+match a
+match !
+match \
+differ mm
+
+regex .+
+match aoeaonhteh nteuhar cHL<RH>L)(*G$ 
+match aohe;qhn N:HTQ)*(@$)*&!+<>_ESA+O? 
+differ 
+
+regex \.
+match .
+differ x

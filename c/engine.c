@@ -262,6 +262,16 @@ struct regex_token *tokenise(char const *pattern) {
             token_append(&write, TYPE_ZERO_ONE);
             break;
 
+        case '.':
+            if (natom > 1) {
+                --natom;
+                token_append(&write, TYPE_CONCAT);
+            }
+            memset(atom, 0xff, BITNSLOTS(256));
+            token_append_atom(&write, atom);
+            ++natom;
+            break;
+
         default:
             if (natom > 1) {
                 --natom;
