@@ -3,10 +3,10 @@
 
 #include "tokeniser.h"
 
-struct regex_paren {
+struct paren {
     int nalt;
     int natom;
-    struct regex_paren *prev;
+    struct paren *prev;
 };
 
 void token_append(struct regex_token ***writep, enum regex_token_type type) {
@@ -33,9 +33,9 @@ void token_free(struct regex_token *token) {
 }
 
 
-void paren_free(struct regex_paren *paren) {
+void paren_free(struct paren *paren) {
     while (paren) {
-        struct regex_paren *prev = paren->prev;
+        struct paren *prev = paren->prev;
         free(paren);
         paren = prev;
     }
@@ -59,7 +59,7 @@ struct regex_token *tokenise(char const *pattern) {
     struct regex_token *r = NULL,
                  **write = &r;
 
-    struct regex_paren *paren = NULL;
+    struct paren *paren = NULL;
     int natom = 0;
     int nalt = 0;
     int escape = 0;
@@ -170,7 +170,7 @@ struct regex_token *tokenise(char const *pattern) {
                 token_append(&write, TYPE_CONCAT);
             }
 
-            struct regex_paren *new_paren = malloc(sizeof(*new_paren));
+            struct paren *new_paren = malloc(sizeof(*new_paren));
             new_paren->nalt = nalt;
             new_paren->natom = natom;
             new_paren->prev = paren;
@@ -197,7 +197,7 @@ struct regex_token *tokenise(char const *pattern) {
 
             nalt = paren->nalt;
             natom = paren->natom;
-            struct regex_paren *old_paren = paren->prev;
+            struct paren *old_paren = paren->prev;
             free(paren);
             paren = old_paren;
 
