@@ -22,3 +22,5 @@ struct state *token2nfa(struct regex_token *token);
 void state_free(struct state *s);
 
 #endif
+
+/* vim: set sw=4 et: */

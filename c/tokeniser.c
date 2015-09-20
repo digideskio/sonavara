@@ -55,238 +55,283 @@ int process_escape(int v) {
     return v;
 }
 
-struct regex_token *tokenise(char const *pattern) {
-    struct regex_token *r = NULL,
-                 **write = &r;
+enum tokeniser_state {
+    DEFAULT,
+    ESCAPE,
+    CCLASS_START,
+    CCLASS_MID,
+    CCLASS_RANGE,
+    CCLASS_ESCAPE,
+};
 
-    struct paren *paren = NULL;
-    int natom = 0;
-    int nalt = 0;
-    int escape = 0;
-    int cclass = 0;
-    int cclass_any = 0;
-    int cclass_negated = 0;
-    int cclass_last = 0;
-    int cclass_range = 0;
-    int cclass_escape = 0;
+struct tokeniser {
+    enum tokeniser_state state;
+    struct regex_token **write;
+
+    struct paren *paren;
+    int natom;
+    int nalt;
+
+    int cclass_negated;
+    int cclass_last;
+    unsigned char cclass_atom[BITNSLOTS(256)];
+};
+
+int tokenise_default(struct tokeniser *sp, int c);
+int tokenise_cclass(struct tokeniser *sp, int c);
+
+struct regex_token *tokenise(char const *pattern) {
+    struct regex_token *r = NULL;
+
+    struct tokeniser s;
+    memset(&s, 0, sizeof(s));
+
+    s.state = DEFAULT;
+    s.write = &r;
 
     unsigned char atom[BITNSLOTS(256)];
 
     for (; *pattern; ++pattern) {
-        if (cclass) {
-            if (!cclass_any && *pattern == '^') {
-                cclass_negated = 1;
-            } else if (cclass_escape) {
-                cclass_escape = 0;
-                int v = process_escape(*pattern);
-                BITSET(atom, v);
-            } else {
-                switch (*pattern) {
-                case '\\':
-                    cclass_escape = 1;
-                    break;
-                case ']':
-                    if (cclass_range) {
-                        BITSET(atom, (int) '-');
-                    }
+        int abort = 0,
+            v = *pattern;
 
-                    if (cclass_negated) {
-                        for (int i = 0; i < BITNSLOTS(256); ++i) {
-                            atom[i] = ~atom[i];
-                        }
-                    }
-                        
-                    cclass = 0;
-                    if (natom > 1) {
-                        --natom;
-                        token_append(&write, TYPE_CONCAT);
-                    }
-                    token_append_atom(&write, atom);
-                    ++natom;
-                    break;
+        switch (s.state) {
+        case DEFAULT:
+            abort = !tokenise_default(&s, v);
+            break;
 
-                case '-':
-                    if (!cclass_last) {
-                        cclass_last = (int) '-';
-                        BITSET(atom, cclass_last);
-                    } else {
-                        cclass_range = 1;
-                    }
-                    break;
+        case ESCAPE:
+            s.state = DEFAULT;
 
-                default:
-                    if (cclass_range) {
-                        for (int i = cclass_last; i <= (int) *pattern; ++i) {
-                            BITSET(atom, i);
-                        }
-                        cclass_last = (int) *pattern;
-                        cclass_range = 0;
-                    } else {
-                        cclass_last = (int) *pattern;
-                        BITSET(atom, cclass_last);
-                    }
-                    break;
-                }
-            }
-
-            cclass_any = 1;
-            continue;
-        }
-
-        if (escape) {
-            escape = 0;
-            if (natom > 1) {
-                --natom;
-                token_append(&write, TYPE_CONCAT);
+            if (s.natom > 1) {
+                --s.natom;
+                token_append(&s.write, TYPE_CONCAT);
             }
 
             memset(atom, 0, BITNSLOTS(256));
-            int v = process_escape(*pattern);
+            v = process_escape(v);
             BITSET(atom, v);
 
-            token_append_atom(&write, atom);
-            ++natom;
-            continue;
+            token_append_atom(&s.write, atom);
+            ++s.natom;
+            break;
+
+        case CCLASS_START:
+            s.state = CCLASS_MID;
+
+            if (v == '^') {
+                s.cclass_negated = 1;
+                break;
+            }
+
+            goto cclass_mid;
+
+        case CCLASS_MID:
+cclass_mid:
+            abort = !tokenise_cclass(&s, v);
+            break;
+
+        case CCLASS_RANGE:
+            if (v == ']') {
+                BITSET(s.cclass_atom, v);
+                goto cclass_mid;
+            }
+
+            for (int i = s.cclass_last; i <= v; ++i) {
+                BITSET(s.cclass_atom, i);
+            }
+
+            s.cclass_last = 0;
+            s.state = CCLASS_MID;
+
+            break;
+
+        case CCLASS_ESCAPE:
+            s.state = CCLASS_MID;
+            v = process_escape(v);
+            BITSET(s.cclass_atom, v);
+            break;
         }
 
-        switch (*pattern) {
-        case '\\':
-            escape = 1;
-            break;
-
-        case '[':
-            cclass = 1;
-            cclass_any = 0;
-            cclass_negated = 0;
-            cclass_range = 0;
-            cclass_last = 0;
-            cclass_escape = 0;
-            memset(atom, 0, BITNSLOTS(256));
-            break;
-
-        case '(':
-            if (natom > 1) {
-                --natom;
-                token_append(&write, TYPE_CONCAT);
-            }
-
-            struct paren *new_paren = malloc(sizeof(*new_paren));
-            new_paren->nalt = nalt;
-            new_paren->natom = natom;
-            new_paren->prev = paren;
-            paren = new_paren;
-
-            nalt = 0;
-            natom = 0;
-            break;
-
-        case ')':
-            if (!paren || natom == 0) {
-                token_free(r);
-                paren_free(paren);
-                return NULL;
-            }
-
-            while (--natom > 0) {
-                token_append(&write, TYPE_CONCAT);
-            }
-            
-            for (; nalt > 0; --nalt) {
-                token_append(&write, TYPE_ALTERNATIVE);
-            }
-
-            nalt = paren->nalt;
-            natom = paren->natom;
-            struct paren *old_paren = paren->prev;
-            free(paren);
-            paren = old_paren;
-
-            ++natom;
-            break;
-
-
-        case '|':
-            if (natom == 0) {
-                token_free(r);
-                paren_free(paren);
-                return NULL;
-            }
-            while (--natom > 0) {
-                token_append(&write, TYPE_CONCAT);
-            }
-            ++nalt;
-            break;
-
-        case '*':
-            if (natom == 0) {
-                token_free(r);
-                paren_free(paren);
-                return NULL;
-            }
-            token_append(&write, TYPE_ZERO_MANY);
-            break;
-
-        case '+':
-            if (natom == 0) {
-                token_free(r);
-                paren_free(paren);
-                return NULL;
-            }
-            token_append(&write, TYPE_ONE_MANY);
-            break;
-
-        case '?':
-            if (natom == 0) {
-                token_free(r);
-                paren_free(paren);
-                return NULL;
-            }
-            token_append(&write, TYPE_ZERO_ONE);
-            break;
-
-        case '.':
-            if (natom > 1) {
-                --natom;
-                token_append(&write, TYPE_CONCAT);
-            }
-            memset(atom, 0xff, BITNSLOTS(256));
-            BITCLEAR(atom, '\n');
-            token_append_atom(&write, atom);
-            ++natom;
-            break;
-
-        default:
-            if (natom > 1) {
-                --natom;
-                token_append(&write, TYPE_CONCAT);
-            }
-            memset(atom, 0, BITNSLOTS(256));
-            BITSET(atom, (int) *pattern);
-            token_append_atom(&write, atom);
-            ++natom;
-            break;
+        if (abort) {
+            paren_free(s.paren);
+            token_free(r);
+            return NULL;
         }
     }
 
-    if (paren) {
-        paren_free(paren);
+    if (s.paren) {
+        paren_free(s.paren);
         token_free(r);
         return NULL;
     }
 
-    if (escape || cclass) {
+    if (s.state != DEFAULT) {
         token_free(r);
         return NULL;
     }
 
-    while (--natom > 0) {
-        token_append(&write, TYPE_CONCAT);
+    while (--s.natom > 0) {
+        token_append(&s.write, TYPE_CONCAT);
     }
 
-    for (; nalt > 0; --nalt) {
-        token_append(&write, TYPE_ALTERNATIVE);
+    for (; s.nalt > 0; --s.nalt) {
+        token_append(&s.write, TYPE_ALTERNATIVE);
     }
 
     return r;
 }
 
+int tokenise_default(struct tokeniser *sp, int v) {
+    unsigned char atom[BITNSLOTS(256)];
+
+    switch (v) {
+    case '\\':
+        sp->state = ESCAPE;
+        break;
+
+    case '[':
+        sp->state = CCLASS_START;
+        sp->cclass_negated = 0;
+        sp->cclass_last = 0;
+        memset(sp->cclass_atom, 0, BITNSLOTS(256));
+        break;
+
+    case '(':
+        if (sp->natom > 1) {
+            --sp->natom;
+            token_append(&sp->write, TYPE_CONCAT);
+        }
+
+        struct paren *new_paren = malloc(sizeof(*new_paren));
+        new_paren->nalt = sp->nalt;
+        new_paren->natom = sp->natom;
+        new_paren->prev = sp->paren;
+        sp->paren = new_paren;
+
+        sp->nalt = 0;
+        sp->natom = 0;
+        break;
+
+    case ')':
+        if (!sp->paren || sp->natom == 0) {
+            return 0;
+        }
+
+        while (--sp->natom > 0) {
+            token_append(&sp->write, TYPE_CONCAT);
+        }
+        
+        for (; sp->nalt > 0; --sp->nalt) {
+            token_append(&sp->write, TYPE_ALTERNATIVE);
+        }
+
+        sp->nalt = sp->paren->nalt;
+        sp->natom = sp->paren->natom;
+        struct paren *old_paren = sp->paren->prev;
+        free(sp->paren);
+        sp->paren = old_paren;
+
+        ++sp->natom;
+        break;
+
+
+    case '|':
+        if (sp->natom == 0) {
+            return 0;
+        }
+        while (--sp->natom > 0) {
+            token_append(&sp->write, TYPE_CONCAT);
+        }
+        ++sp->nalt;
+        break;
+
+    case '*':
+        if (sp->natom == 0) {
+            return 0;
+        }
+        token_append(&sp->write, TYPE_ZERO_MANY);
+        break;
+
+    case '+':
+        if (sp->natom == 0) {
+            return 0;
+        }
+        token_append(&sp->write, TYPE_ONE_MANY);
+        break;
+
+    case '?':
+        if (sp->natom == 0) {
+            return 0;
+        }
+        token_append(&sp->write, TYPE_ZERO_ONE);
+        break;
+
+    case '.':
+        if (sp->natom > 1) {
+            --sp->natom;
+            token_append(&sp->write, TYPE_CONCAT);
+        }
+        memset(atom, 0xff, BITNSLOTS(256));
+        BITCLEAR(atom, '\n');
+        token_append_atom(&sp->write, atom);
+        ++sp->natom;
+        break;
+
+    default:
+        if (sp->natom > 1) {
+            --sp->natom;
+            token_append(&sp->write, TYPE_CONCAT);
+        }
+        memset(atom, 0, BITNSLOTS(256));
+        BITSET(atom, v);
+        token_append_atom(&sp->write, atom);
+        ++sp->natom;
+        break;
+    }
+
+    return 1;
+}
+
+int tokenise_cclass(struct tokeniser *sp, int v) {
+    switch (v) {
+    case '\\':
+        sp->state = CCLASS_ESCAPE;
+        break;
+
+    case ']':
+        sp->state = DEFAULT;
+
+        if (sp->cclass_negated) {
+            for (int i = 0; i < BITNSLOTS(256); ++i) {
+                sp->cclass_atom[i] = ~sp->cclass_atom[i];
+            }
+        }
+            
+        if (sp->natom > 1) {
+            --sp->natom;
+            token_append(&sp->write, TYPE_CONCAT);
+        }
+        token_append_atom(&sp->write, sp->cclass_atom);
+        ++sp->natom;
+        break;
+
+    case '-':
+        if (!sp->cclass_last) {
+            sp->cclass_last = v;
+            BITSET(sp->cclass_atom, sp->cclass_last);
+        } else {
+            sp->state = CCLASS_RANGE;
+        }
+        break;
+
+    default:
+        sp->cclass_last = v;
+        BITSET(sp->cclass_atom, v);
+        break;
+    }
+
+    return 1;
+}
+
+/* vim: set sw=4 et: */

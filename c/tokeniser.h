@@ -29,3 +29,5 @@ void token_free(struct regex_token *token);
 struct regex_token *tokenise(char const *pattern);
 
 #endif
+
+/* vim: set sw=4 et: */

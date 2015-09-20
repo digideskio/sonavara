@@ -164,3 +164,5 @@ struct state *token2nfa(struct regex_token *token) {
 
     return e1.start;
 }
+
+/* vim: set sw=4 et: */

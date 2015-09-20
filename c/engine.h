@@ -9,3 +9,4 @@ int regex_match(regex_t *re, char const *s);
 
 #endif
 
+/* vim: set sw=4 et: */
