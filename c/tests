@@ -163,7 +163,7 @@ differ x
 
 
 # test character class expresions
-regex [[:alnum]]+
+regex [[:alnum:]]+
 match abcdABCD1234
 differ !
 
@@ -171,9 +171,18 @@ regex [[:digit:]]+
 match 1231
 differ 123a
 
+regex (?i:[[:lower:]])+
+match AbC
+
 regex [[:punct:][:xdigit:]]+
 match &!,87fE
 differ mnop
+
+regex [[:^alpha:]]+
+match 123
+differ abc
+
+noregex (?i:[[:^lower:]]+)
 
 
 # test {+}

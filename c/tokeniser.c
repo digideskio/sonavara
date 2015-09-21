@@ -607,6 +607,68 @@ int tokenise_cclass_start(struct tokeniser *sp, char const **pattern) {
     return tokenise_cclass_mid(sp, pattern);
 }
 
+struct cclass_fn {
+    char const *match;
+    int (*fn)(int);
+} cclass_fns[] = {
+    {"alnum", isalnum},
+    {"alpha", isalpha},
+    {"blank", isblank},
+    {"cntrl", iscntrl},
+    {"digit", isdigit},
+    {"graph", isgraph},
+    {"lower", islower},
+    {"print", isprint},
+    {"punct", ispunct},
+    {"space", isspace},
+    {"upper", isupper},
+    {"xdigit", isxdigit},
+    {NULL, NULL},
+};
+
+int attempt_cclass_expr(struct tokeniser *sp, char const **pattern) {
+    *pattern += 2;
+
+    int negate = **pattern == '^';
+    if (negate) {
+        ++*pattern;
+    }
+
+    for (struct cclass_fn *fn = cclass_fns; fn->match; ++fn) {
+        int matchlen = strlen(fn->match);
+        if (strncmp(*pattern, fn->match, matchlen) == 0) {
+            if (strncmp(*pattern + matchlen, ":]", 2) == 0) {
+                *pattern += matchlen + 1;
+
+                if (sp->opts & OPT_I && negate && (fn->fn == islower || fn->fn == isupper)) {
+                    return 0;
+                }
+
+                for (int i = 0; i < 256; ++i) {
+                    if (negate) {
+                        if (!fn->fn(i)) {
+                            BITSET(sp->cclass_atom, i);
+                        }
+                    } else {
+                        if (fn->fn(i)) {
+                            if (sp->opts & OPT_I) {
+                                BITSET(sp->cclass_atom, tolower(i));
+                                BITSET(sp->cclass_atom, toupper(i));
+                            } else {
+                                BITSET(sp->cclass_atom, i);
+                            }
+                        }
+                    }
+                }
+
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
     switch (**pattern) {
     case '\\':
@@ -642,6 +704,10 @@ int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
         break;
 
     default:
+        if (strncmp(*pattern, "[:", 2) == 0) {
+            return attempt_cclass_expr(sp, pattern);
+        }
+
         sp->cclass_last = **pattern;
         if (sp->opts & OPT_I) {
             BITSET(sp->cclass_atom, tolower(**pattern));
