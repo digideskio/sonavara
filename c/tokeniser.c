@@ -391,7 +391,9 @@ int tokenise_default(struct tokeniser *sp, char const **pattern) {
             token_append(&sp->write, TYPE_CONCAT);
         }
         memset(atom, 0xff, BITNSLOTS(256));
-        BITCLEAR(atom, '\n');
+        if (!(sp->opts & OPT_S)) {
+            BITCLEAR(atom, '\n');
+        }
         token_append_atom(&sp->write, atom);
         ++sp->natom;
         sp->last = *pattern;
