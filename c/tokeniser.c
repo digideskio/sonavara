@@ -101,7 +101,8 @@ struct tokeniser {
 };
 
 int process(struct tokeniser *sp, char const *pattern, char const *stop);
-int tokenise_default(struct tokeniser *sp, char const *pattern);
+int tokenise_default(struct tokeniser *sp, char const **pattern);
+int tokenise_paren_opts(struct tokeniser *sp, int v, int disable);
 int tokenise_escape(struct tokeniser *sp, char const **pattern);
 int tokenise_brace_pre_comma(struct tokeniser *sp, int v);
 int tokenise_brace_post_comma(struct tokeniser *sp, int v);
@@ -159,22 +160,15 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
 
         switch (sp->state) {
         case DEFAULT:
-            abort = !tokenise_default(sp, pattern);
+            abort = !tokenise_default(sp, &pattern);
             break;
 
         case PAREN_OPTS:
-            if (*pattern == ':') {
-                sp->state = DEFAULT;
-            } else if (*pattern == '-') {
-                sp->state = PAREN_OPTS_DISABLE;
-            }
-
+            abort = !tokenise_paren_opts(sp, v, 0);
             break;
 
         case PAREN_OPTS_DISABLE:
-            if (*pattern == ':') {
-                sp->state = DEFAULT;
-            }
+            abort = !tokenise_paren_opts(sp, v, 1);
             break;
 
         case BRACE_PRE_COMMA:
@@ -192,7 +186,7 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
             }
 
             memcpy(sp->cclass_atom_parent, sp->cclass_atom, BITNSLOTS(256));
-            abort = !tokenise_default(sp, pattern);
+            abort = !tokenise_default(sp, &pattern);
             sp->cclass_subtract = 1;
 
             break;
@@ -245,20 +239,20 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
     return 1;
 }
 
-int tokenise_default(struct tokeniser *sp, char const *pattern) {
+int tokenise_default(struct tokeniser *sp, char const **pattern) {
     unsigned char atom[BITNSLOTS(256)];
 
-    switch (*pattern) {
+    switch (**pattern) {
     case '{':
         sp->state = BRACE_PRE_COMMA;
         sp->brace_low = -1;
         sp->brace_high = -1;
-        sp->brace_start = pattern;
+        sp->brace_start = *pattern;
         break;
 
     case '\\':
         sp->state = ESCAPE;
-        sp->last = pattern;
+        sp->last = *pattern;
         break;
 
     case '[':
@@ -267,18 +261,18 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
         sp->cclass_last = 0;
         sp->cclass_subtract = 0;
         memset(sp->cclass_atom, 0, BITNSLOTS(256));
-        sp->last = pattern;
+        sp->last = *pattern;
         break;
 
     case '(':
-        if (strncmp(pattern, "(?#", 3) == 0) {
+        if (strncmp(*pattern, "(?#", 3) == 0) {
             sp->state = COMMENT;
-            pattern += 2;
+            *pattern += 2;
             break;
         }
 
-        if (strncmp(pattern, "(?", 2) == 0) {
-            ++pattern;
+        if (strncmp(*pattern, "(?", 2) == 0) {
+            ++*pattern;
             sp->state = PAREN_OPTS;
         }
 
@@ -291,7 +285,7 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
         new_paren->nalt = sp->nalt;
         new_paren->natom = sp->natom;
         new_paren->opts = sp->opts;
-        new_paren->last = pattern;
+        new_paren->last = *pattern;
         new_paren->prev = sp->paren;
         sp->paren = new_paren;
 
@@ -370,7 +364,7 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
         BITCLEAR(atom, '\n');
         token_append_atom(&sp->write, atom);
         ++sp->natom;
-        sp->last = pattern;
+        sp->last = *pattern;
         break;
 
     default:
@@ -379,11 +373,44 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
             token_append(&sp->write, TYPE_CONCAT);
         }
         memset(atom, 0, BITNSLOTS(256));
-        BITSET(atom, *pattern);
+        BITSET(atom, **pattern);
         token_append_atom(&sp->write, atom);
         ++sp->natom;
-        sp->last = pattern;
+        sp->last = *pattern;
         break;
+    }
+
+    return 1;
+}
+
+int tokenise_paren_opts(struct tokeniser *sp, int v, int disable) {
+    int opt = 0;
+
+    if (v == ':') {
+        sp->state = DEFAULT;
+        return 1;
+    } else if (v == '-' && !disable) {
+        sp->state = PAREN_OPTS_DISABLE;
+        return 1;
+    }
+    
+    if (v == 'i') {
+        opt = OPT_I;
+    } else if (v == 's') {
+        opt = OPT_S;
+    } else if (v == 'x') {
+        opt = OPT_X;
+    }
+
+    if (!opt) {
+        fprintf(stderr, "DAMN %c\n", v);
+        return 0;
+    }
+
+    if (!disable) {
+        sp->opts |= opt;
+    } else {
+        sp->opts &= ~opt;
     }
 
     return 1;
@@ -619,7 +646,7 @@ int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
 
     cclass_post_cleanup(sp);
 
-    return tokenise_default(sp, *pattern);
+    return tokenise_default(sp, pattern);
 }
 
 void cclass_post_cleanup(struct tokeniser *sp) {
