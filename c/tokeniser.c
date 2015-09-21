@@ -44,17 +44,41 @@ void paren_free(struct paren *paren) {
     }
 }
 
-int process_escape(int v) {
-    switch (v) {
-    case '0': v = '\0'; break;
-    case 'a': v = '\a'; break;
-    case 'b': v = '\b'; break;
-    case 'f': v = '\f'; break;
-    case 'n': v = '\n'; break;
-    case 'r': v = '\r'; break;
-    case 't': v = '\t'; break;
-    case 'v': v = '\v'; break;
+int process_escape(char const **pattern) {
+    int v = 0;
+
+    if (**pattern >= '0' && **pattern <= '7') {
+        // Octal.  Why.
+        for (int i = 0; i < 3 && **pattern >= '0' && **pattern <= '7'; ++i) {
+            v = (v * 8) + (*(*pattern)++ - '0');
+        }
+        --(*pattern);
+    } else if (**pattern == 'x') {
+        ++(*pattern);
+        for (int i = 0; i < 2 && (isdigit(**pattern) || (tolower(**pattern) >= 'a' && tolower(**pattern) <= 'f')); ++i) {
+            int c = tolower(*(*pattern)++);
+            if (c >= 'a' && c <= 'f') {
+                c = c - 'a' + 10;
+            } else {
+                c -= '0';
+            }
+            v = (v * 16) + c;
+        }
+        --(*pattern);
+    } else {
+        switch (**pattern) {
+        case '0': v = '\0'; break;
+        case 'a': v = '\a'; break;
+        case 'b': v = '\b'; break;
+        case 'f': v = '\f'; break;
+        case 'n': v = '\n'; break;
+        case 'r': v = '\r'; break;
+        case 't': v = '\t'; break;
+        case 'v': v = '\v'; break;
+        default: v = **pattern; break;
+        }
     }
+
     return v;
 }
 
@@ -209,8 +233,14 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
 
         case CCLASS_ESCAPE:
             sp->state = CCLASS_MID;
-            v = process_escape(v);
-            BITSET(sp->cclass_atom, v);
+            v = process_escape(&pattern);
+
+            if (sp->opts & OPT_I) {
+                BITSET(sp->cclass_atom, tolower(v));
+                BITSET(sp->cclass_atom, toupper(v));
+            } else {
+                BITSET(sp->cclass_atom, v);
+            }
             break;
 
         case CCLASS_POST:
@@ -373,7 +403,12 @@ int tokenise_default(struct tokeniser *sp, char const **pattern) {
             token_append(&sp->write, TYPE_CONCAT);
         }
         memset(atom, 0, BITNSLOTS(256));
-        BITSET(atom, **pattern);
+        if (sp->opts & OPT_I) {
+            BITSET(atom, tolower(**pattern));
+            BITSET(atom, toupper(**pattern));
+        } else {
+            BITSET(atom, **pattern);
+        }
         token_append_atom(&sp->write, atom);
         ++sp->natom;
         sp->last = *pattern;
@@ -403,7 +438,6 @@ int tokenise_paren_opts(struct tokeniser *sp, int v, int disable) {
     }
 
     if (!opt) {
-        fprintf(stderr, "DAMN %c\n", v);
         return 0;
     }
 
@@ -426,33 +460,15 @@ int tokenise_escape(struct tokeniser *sp, char const **pattern) {
 
     unsigned char atom[256];
 
-    int v = 0;
-
-    if (**pattern >= '0' && **pattern <= '7') {
-        // Octal.  Why.
-        for (int i = 0; i < 3 && **pattern >= '0' && **pattern <= '7'; ++i) {
-            v = (v * 8) + (*(*pattern)++ - '0');
-        }
-        --(*pattern);
-    } else if (**pattern == 'x') {
-        ++(*pattern);
-        for (int i = 0; i < 2 && (isdigit(**pattern) || (tolower(**pattern) >= 'a' && tolower(**pattern) <= 'f')); ++i) {
-            int c = tolower(*(*pattern)++);
-            if (c >= 'a' && c <= 'f') {
-                c = c - 'a' + 10;
-            } else {
-                c -= '0';
-            }
-            v = (v * 16) + c;
-        }
-        --(*pattern);
-    } else {
-        v = **pattern;
-    }
+    int v = process_escape(pattern);
 
     memset(atom, 0, BITNSLOTS(256));
-    v = process_escape(v);
-    BITSET(atom, v);
+    if (sp->opts & OPT_I) {
+        BITSET(atom, toupper(v));
+        BITSET(atom, tolower(v));
+    } else {
+        BITSET(atom, v);
+    }
 
     token_append_atom(&sp->write, atom);
     ++sp->natom;
@@ -615,7 +631,12 @@ int tokenise_cclass_mid(struct tokeniser *sp, int v) {
 
     default:
         sp->cclass_last = v;
-        BITSET(sp->cclass_atom, v);
+        if (sp->opts & OPT_I) {
+            BITSET(sp->cclass_atom, tolower(v));
+            BITSET(sp->cclass_atom, toupper(v));
+        } else {
+            BITSET(sp->cclass_atom, v);
+        }
         break;
     }
 
@@ -629,7 +650,12 @@ int tokenise_cclass_range(struct tokeniser *sp, int v) {
     }
 
     for (int i = sp->cclass_last; i <= v; ++i) {
-        BITSET(sp->cclass_atom, i);
+        if (sp->opts & OPT_I) {
+            BITSET(sp->cclass_atom, tolower(i));
+            BITSET(sp->cclass_atom, toupper(i));
+        } else {
+            BITSET(sp->cclass_atom, i);
+        }
     }
 
     sp->cclass_last = 0;

@@ -221,6 +221,11 @@ regex (?ix: o k a y  \   th(?-x: )EN )
 match okAY TH En
 differ o kAY TH En
 
+regex (?i:[\x41])
+match a
+match A
+differ b
+
 
 # test (?#)
 regex ab.(?# uhm, sure?! )e
