@@ -68,6 +68,8 @@ enum tokeniser_state {
     CCLASS_RANGE,
     CCLASS_ESCAPE,
     CCLASS_POST,
+    COMMENT,
+    COMMENT_ESCAPE,
 };
 
 struct tokeniser {
@@ -197,6 +199,19 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
         case CCLASS_POST:
             abort = !tokenise_cclass_post(sp, &pattern);
             break;
+
+        case COMMENT:
+            if (v == ')') {
+                sp->state = DEFAULT;
+            } else if (v == '\\') {
+                sp->state = COMMENT_ESCAPE;
+            }
+
+            break;
+
+        case COMMENT_ESCAPE:
+            sp->state = COMMENT;
+            break;
         }
 
         if (abort) {
@@ -233,6 +248,12 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
         break;
 
     case '(':
+        if (strncmp(pattern, "(?#", 3) == 0) {
+            sp->state = COMMENT;
+            pattern += 2;
+            break;
+        }
+
         if (sp->natom > 1) {
             --sp->natom;
             token_append(&sp->write, TYPE_CONCAT);

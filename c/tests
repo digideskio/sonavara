@@ -226,3 +226,6 @@ differ o kAY TH En
 regex ab.(?# uhm, sure?! )e
 match abxe
 differ ab.(?# uhm, sure?! )e
+
+regex ab.(?# uhm, sure?! \) heh)e
+match abxe
