@@ -89,6 +89,7 @@ enum tokeniser_state {
     BRACE_PRE_COMMA,
     BRACE_POST_COMMA,
     BRACE_CCLASS_SUBTRACT,
+    BRACE_CCLASS_ADD,
     ESCAPE,
     CCLASS_START,
     CCLASS_MID,
@@ -98,6 +99,9 @@ enum tokeniser_state {
     COMMENT,
     COMMENT_ESCAPE,
 };
+
+#define CCLASS_BINARY_SUBTRACT 1
+#define CCLASS_BINARY_ADD 2
 
 #define OPT_I (1 << 0)
 #define OPT_S (1 << 1)
@@ -119,7 +123,7 @@ struct tokeniser {
 
     int cclass_negated;
     int cclass_last;
-    int cclass_subtract;
+    int cclass_binary;
     unsigned char cclass_atom[BITNSLOTS(256)];
     unsigned char cclass_atom_parent[BITNSLOTS(256)];
 };
@@ -204,15 +208,17 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
             break;
 
         case BRACE_CCLASS_SUBTRACT:
+        case BRACE_CCLASS_ADD:
             if (v != '[') {
                 abort = 1;
                 break;
             }
 
             memcpy(sp->cclass_atom_parent, sp->cclass_atom, BITNSLOTS(256));
+            int state = sp->state;
             abort = !tokenise_default(sp, &pattern);
-            sp->cclass_subtract = 1;
-
+            sp->cclass_binary =
+                state == BRACE_CCLASS_SUBTRACT ? CCLASS_BINARY_SUBTRACT : CCLASS_BINARY_ADD;
             break;
 
         case ESCAPE:
@@ -289,7 +295,7 @@ int tokenise_default(struct tokeniser *sp, char const **pattern) {
         sp->state = CCLASS_START;
         sp->cclass_negated = 0;
         sp->cclass_last = 0;
-        sp->cclass_subtract = 0;
+        sp->cclass_binary = 0;
         memset(sp->cclass_atom, 0, BITNSLOTS(256));
         sp->last = *pattern;
         break;
@@ -684,12 +690,21 @@ int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
             }
         }
 
-        if (sp->cclass_subtract) {
-            for (int i = 0; i < 256; ++i) {
-                if (BITTEST(sp->cclass_atom, i)) {
-                    BITCLEAR(sp->cclass_atom_parent, i);
+        if (sp->cclass_binary) {
+            if (sp->cclass_binary == CCLASS_BINARY_SUBTRACT) {
+                for (int i = 0; i < 256; ++i) {
+                    if (BITTEST(sp->cclass_atom, i)) {
+                        BITCLEAR(sp->cclass_atom_parent, i);
+                    }
+                }
+            } else if (sp->cclass_binary == CCLASS_BINARY_ADD) {
+                for (int i = 0; i < 256; ++i) {
+                    if (BITTEST(sp->cclass_atom, i)) {
+                        BITSET(sp->cclass_atom_parent, i);
+                    }
                 }
             }
+
             memcpy(sp->cclass_atom, sp->cclass_atom_parent, BITNSLOTS(256));
         }
         break;
@@ -745,6 +760,12 @@ int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
     if (strncmp(*pattern, "{-}", 3) == 0) {
         *pattern += 2;
         sp->state = BRACE_CCLASS_SUBTRACT;
+        return 1;
+    }
+
+    if (strncmp(*pattern, "{+}", 3) == 0) {
+        *pattern += 2;
+        sp->state = BRACE_CCLASS_ADD;
         return 1;
     }
 

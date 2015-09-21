@@ -186,7 +186,9 @@ noregex (?i:[[:^lower:]]+)
 
 
 # test {+}
-regex [[:alpha:]]{-}[[:lower:]]{+}[q]
+regex [[:alpha:]]{-}[[:lower:]]{+}[q]+
+match ABCq
+differ abc
 
 
 # test {}
