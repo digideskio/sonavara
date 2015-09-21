@@ -3,7 +3,7 @@ OBJS := $(SRCS:%.c=obj/%.o)
 DEPS := $(OBJS:obj/%.o=obj/%.d)
 
 all: test
-	#valgrind --dsymutil=yes --leak-check=full ./test
+	@#valgrind --dsymutil=yes --leak-check=full ./test
 	./test
 
 test: obj/libengine.a obj/test.o

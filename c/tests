@@ -162,6 +162,24 @@ differ i
 differ x
 
 
+# test character class expresions
+regex [[:alnum]]+
+match abcdABCD1234
+differ !
+
+regex [[:digit:]]+
+match 1231
+differ 123a
+
+regex [[:punct:][:xdigit:]]+
+match &!,87fE
+differ mnop
+
+
+# test {+}
+regex [[:alpha:]]{-}[[:lower:]]{+}[q]
+
+
 # test {}
 regex [ab]{2}
 match ab
