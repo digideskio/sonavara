@@ -399,6 +399,16 @@ int tokenise_default(struct tokeniser *sp, char const **pattern) {
         sp->last = *pattern;
         break;
 
+    case ' ':
+    case '\r':
+    case '\n':
+    case '\t':
+        if (sp->opts & OPT_X) {
+            break;
+        }
+
+        /* fallthrough */
+
     default:
         if (sp->natom > 1) {
             --sp->natom;
