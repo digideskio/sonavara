@@ -92,7 +92,7 @@ struct tokeniser {
 
 int process(struct tokeniser *sp, char const *pattern, char const *stop);
 int tokenise_default(struct tokeniser *sp, char const *pattern);
-int tokenise_escape(struct tokeniser *sp, int v);
+int tokenise_escape(struct tokeniser *sp, char const **pattern);
 int tokenise_brace_pre_comma(struct tokeniser *sp, int v);
 int tokenise_brace_post_comma(struct tokeniser *sp, int v);
 int tokenise_cclass_start(struct tokeniser *sp, int v);
@@ -143,9 +143,6 @@ struct regex_token *tokenise(char const *pattern) {
 }
 
 int process(struct tokeniser *sp, char const *pattern, char const *stop) {
-    unsigned char atom[BITNSLOTS(256)];
-
-
     for (; pattern != stop && *pattern; ++pattern) {
         int abort = 0,
             v = *pattern;
@@ -176,7 +173,7 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
             break;
 
         case ESCAPE:
-            abort = !tokenise_escape(sp, v);
+            abort = !tokenise_escape(sp, &pattern);
             break;
 
         case CCLASS_START:
@@ -340,7 +337,7 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
     return 1;
 }
 
-int tokenise_escape(struct tokeniser *sp, int v) {
+int tokenise_escape(struct tokeniser *sp, char const **pattern) {
     sp->state = DEFAULT;
 
     if (sp->natom > 1) {
@@ -349,6 +346,30 @@ int tokenise_escape(struct tokeniser *sp, int v) {
     }
 
     unsigned char atom[256];
+
+    int v = 0;
+
+    if (**pattern >= '0' && **pattern <= '7') {
+        // Octal.  Why.
+        for (int i = 0; i < 3 && **pattern >= '0' && **pattern <= '7'; ++i) {
+            v = (v * 8) + (*(*pattern)++ - '0');
+        }
+        --(*pattern);
+    } else if (**pattern == 'x') {
+        ++(*pattern);
+        for (int i = 0; i < 2 && (isdigit(**pattern) || (tolower(**pattern) >= 'a' && tolower(**pattern) <= 'f')); ++i) {
+            int c = tolower(*(*pattern)++);
+            if (c >= 'a' && c <= 'f') {
+                c = c - 'a' + 10;
+            } else {
+                c -= '0';
+            }
+            v = (v * 16) + c;
+        }
+        --(*pattern);
+    } else {
+        v = **pattern;
+    }
 
     memset(atom, 0, BITNSLOTS(256));
     v = process_escape(v);
