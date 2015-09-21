@@ -8,6 +8,7 @@
 struct paren {
     int nalt;
     int natom;
+    int opts;
     char const *last;
     struct paren *prev;
 };
@@ -59,6 +60,8 @@ int process_escape(int v) {
 
 enum tokeniser_state {
     DEFAULT,
+    PAREN_OPTS,
+    PAREN_OPTS_DISABLE,
     BRACE_PRE_COMMA,
     BRACE_POST_COMMA,
     BRACE_CCLASS_SUBTRACT,
@@ -72,6 +75,10 @@ enum tokeniser_state {
     COMMENT_ESCAPE,
 };
 
+#define OPT_I (1 << 0)
+#define OPT_S (1 << 1)
+#define OPT_X (1 << 2)
+
 struct tokeniser {
     enum tokeniser_state state;
     struct regex_token **write;
@@ -79,6 +86,7 @@ struct tokeniser {
     struct paren *paren;
     int natom;
     int nalt;
+    int opts;
     char const *last;
 
     char const *brace_start;
@@ -152,6 +160,21 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
         switch (sp->state) {
         case DEFAULT:
             abort = !tokenise_default(sp, pattern);
+            break;
+
+        case PAREN_OPTS:
+            if (*pattern == ':') {
+                sp->state = DEFAULT;
+            } else if (*pattern == '-') {
+                sp->state = PAREN_OPTS_DISABLE;
+            }
+
+            break;
+
+        case PAREN_OPTS_DISABLE:
+            if (*pattern == ':') {
+                sp->state = DEFAULT;
+            }
             break;
 
         case BRACE_PRE_COMMA:
@@ -254,6 +277,11 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
             break;
         }
 
+        if (strncmp(pattern, "(?", 2) == 0) {
+            ++pattern;
+            sp->state = PAREN_OPTS;
+        }
+
         if (sp->natom > 1) {
             --sp->natom;
             token_append(&sp->write, TYPE_CONCAT);
@@ -262,12 +290,14 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
         struct paren *new_paren = malloc(sizeof(*new_paren));
         new_paren->nalt = sp->nalt;
         new_paren->natom = sp->natom;
+        new_paren->opts = sp->opts;
         new_paren->last = pattern;
         new_paren->prev = sp->paren;
         sp->paren = new_paren;
 
         sp->nalt = 0;
         sp->natom = 0;
+        // sp->opts carries through
         sp->last = 0;
         break;
 
@@ -286,6 +316,7 @@ int tokenise_default(struct tokeniser *sp, char const *pattern) {
 
         sp->nalt = sp->paren->nalt;
         sp->natom = sp->paren->natom;
+        sp->opts = sp->paren->opts;
         sp->last = sp->paren->last;
         struct paren *old_paren = sp->paren->prev;
         free(sp->paren);
