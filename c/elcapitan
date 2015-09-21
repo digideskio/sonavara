@@ -1,0 +1,6 @@
+==7554== LEAK SUMMARY:
+==7554==    definitely lost: 4,120 bytes in 2 blocks
+==7554==    indirectly lost: 2,288 bytes in 6 blocks
+==7554==      possibly lost: 4,880 bytes in 45 blocks
+==7554==    still reachable: 2,344 bytes in 12 blocks
+==7554==         suppressed: 12,812 bytes in 122 blocks
