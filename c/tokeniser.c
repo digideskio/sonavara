@@ -130,9 +130,9 @@ int tokenise_paren_opts(struct tokeniser *sp, int v, int disable);
 int tokenise_escape(struct tokeniser *sp, char const **pattern);
 int tokenise_brace_pre_comma(struct tokeniser *sp, int v);
 int tokenise_brace_post_comma(struct tokeniser *sp, int v);
-int tokenise_cclass_start(struct tokeniser *sp, int v);
-int tokenise_cclass_mid(struct tokeniser *sp, int v);
-int tokenise_cclass_range(struct tokeniser *sp, int v);
+int tokenise_cclass_start(struct tokeniser *sp, char const **pattern);
+int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern);
+int tokenise_cclass_range(struct tokeniser *sp, char const **pattern);
 int tokenise_cclass_post(struct tokeniser *sp, char const **pattern);
 void cclass_post_cleanup(struct tokeniser *sp);
 
@@ -220,15 +220,15 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
             break;
 
         case CCLASS_START:
-            abort = !tokenise_cclass_start(sp, v);
+            abort = !tokenise_cclass_start(sp, &pattern);
             break;
 
         case CCLASS_MID:
-            abort = !tokenise_cclass_mid(sp, v);
+            abort = !tokenise_cclass_mid(sp, &pattern);
             break;
 
         case CCLASS_RANGE:
-            abort = !tokenise_cclass_range(sp, v);
+            abort = !tokenise_cclass_range(sp, &pattern);
             break;
 
         case CCLASS_ESCAPE:
@@ -596,19 +596,19 @@ int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
     return 1;
 }
 
-int tokenise_cclass_start(struct tokeniser *sp, int v) {
+int tokenise_cclass_start(struct tokeniser *sp, char const **pattern) {
     sp->state = CCLASS_MID;
 
-    if (v == '^') {
+    if (**pattern == '^') {
         sp->cclass_negated = 1;
         return 1;
     }
 
-    return tokenise_cclass_mid(sp, v);
+    return tokenise_cclass_mid(sp, pattern);
 }
 
-int tokenise_cclass_mid(struct tokeniser *sp, int v) {
-    switch (v) {
+int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
+    switch (**pattern) {
     case '\\':
         sp->state = CCLASS_ESCAPE;
         break;
@@ -634,7 +634,7 @@ int tokenise_cclass_mid(struct tokeniser *sp, int v) {
 
     case '-':
         if (!sp->cclass_last) {
-            sp->cclass_last = v;
+            sp->cclass_last = **pattern;
             BITSET(sp->cclass_atom, sp->cclass_last);
         } else {
             sp->state = CCLASS_RANGE;
@@ -642,12 +642,12 @@ int tokenise_cclass_mid(struct tokeniser *sp, int v) {
         break;
 
     default:
-        sp->cclass_last = v;
+        sp->cclass_last = **pattern;
         if (sp->opts & OPT_I) {
-            BITSET(sp->cclass_atom, tolower(v));
-            BITSET(sp->cclass_atom, toupper(v));
+            BITSET(sp->cclass_atom, tolower(**pattern));
+            BITSET(sp->cclass_atom, toupper(**pattern));
         } else {
-            BITSET(sp->cclass_atom, v);
+            BITSET(sp->cclass_atom, **pattern);
         }
         break;
     }
@@ -655,13 +655,13 @@ int tokenise_cclass_mid(struct tokeniser *sp, int v) {
     return 1;
 }
 
-int tokenise_cclass_range(struct tokeniser *sp, int v) {
-    if (v == ']') {
-        BITSET(sp->cclass_atom, v);
-        return tokenise_cclass_mid(sp, v);
+int tokenise_cclass_range(struct tokeniser *sp, char const **pattern) {
+    if (**pattern == ']') {
+        BITSET(sp->cclass_atom, **pattern);
+        return tokenise_cclass_mid(sp, pattern);
     }
 
-    for (int i = sp->cclass_last; i <= v; ++i) {
+    for (int i = sp->cclass_last; i <= **pattern; ++i) {
         if (sp->opts & OPT_I) {
             BITSET(sp->cclass_atom, tolower(i));
             BITSET(sp->cclass_atom, toupper(i));
