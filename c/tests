@@ -222,7 +222,7 @@ match okAY TH En
 differ o kAY TH En
 
 
-# test (#)
-regex ab.(# uhm, sure?! )e
+# test (?#)
+regex ab.(?# uhm, sure?! )e
 match abxe
-differ ab.(# uhm, sure?! )e
+differ ab.(?# uhm, sure?! )e
