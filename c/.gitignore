@@ -1,2 +1,3 @@
 enginetest
-enginetest.dSYM
+lexer
+*.dSYM

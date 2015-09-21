@@ -52,50 +52,92 @@ void state_list_free(struct state_list *clist) {
     }
 }
 
-void state_list_add(struct state_list **l, struct state *s) {
+int state_list_add(struct state_list **l, struct state *s) {
+    /* Return true if any added state is STATE_MATCH. */
+
     if (!s) {
-        return;
+        return 0;
     }
 
     if (s->type == STATE_SPLIT) {
-        state_list_add(l, s->o1);
-        state_list_add(l, s->o2);
-        return;
+        int a = state_list_add(l, s->o1);
+        int b = state_list_add(l, s->o2);
+        return a || b;
     }
 
     state_list_prepend(l, s);
+    return s->type == STATE_MATCH;
 }
 
-void step(struct state_list *clist, int c, struct state_list **nlist) {
+int step(struct state_list *clist, int c, struct state_list **nlist) {
+    /* Return true if any state added to nlist is STATE_MATCH. */
+
+    int r = 0;
+
     for (; clist; clist = clist->next) {
         struct state *s = clist->s;
         if (s->type == STATE_ATOM && BITTEST(s->atom, c)) {
-            state_list_add(nlist, s->o1);
+            if (state_list_add(nlist, s->o1)) {
+                r = 1;
+            }
         }
     }
+
+    return r;
 }
 
-int regex_match(regex_t *re, char const *s) {
+int match(regex_t *re, char const *s, int prefix) {
+    /* If !prefix, we return 1 or 0 if we match the entire string or not.
+     * If prefix, we return the number of characters that generate a match,
+     * which may be 0.  If there's no match, return -1. */
+
     struct state_list *clist = NULL;
     state_list_add(&clist, re->entry);
 
+    int len = 0;
+    int longest_match = -1;
+
     for (; *s; ++s) {
+        ++len;
+
         struct state_list *nlist = NULL;
-        step(clist, *s, &nlist);
+        int r = step(clist, *s, &nlist);
         state_list_free(clist);
         clist = nlist;
+
+        if (r) {
+            longest_match = len;
+        }
     }
 
-    for (struct state_list *search = clist; search; search = search->next) {
-        if (search->s->type == STATE_MATCH) {
-            state_list_free(clist);
-            return 1;
+    /* Exact non-empty match. */
+    if (longest_match == len) {
+        state_list_free(clist);
+        return prefix ? len : 1;
+    }
+
+    if (len == 0) {
+        // We may match the empty string.
+        for (struct state_list *search = clist; search; search = search->next) {
+            if (search->s->type == STATE_MATCH) {
+                state_list_free(clist);
+                return prefix ? 0 : 1;
+            }
         }
     }
 
     state_list_free(clist);
 
-    return 0;
+    /* No exact match. */
+    return prefix ? longest_match : 0;
+}
+
+int regex_match(regex_t *re, char const *s) {
+    return match(re, s, 0);
+}
+
+int regex_match_prefix(regex_t *re, char const *s) {
+    return match(re, s, 1);
 }
 
 /* vim: set sw=4 et: */

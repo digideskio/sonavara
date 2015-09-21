@@ -6,6 +6,7 @@ typedef struct regex regex_t;
 regex_t *regex_compile(char const *pattern);
 void regex_free(regex_t *re);
 int regex_match(regex_t *re, char const *s);
+int regex_match_prefix(regex_t *re, char const *s);
 
 #endif
 
