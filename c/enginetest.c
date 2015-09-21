@@ -5,7 +5,7 @@
 #include "engine.h"
 
 int main(int argc, char **argv) {
-    FILE *f = fopen("tests", "r");
+    FILE *f = fopen(argv[1], "r");
     if (!f) {
         fprintf(stderr, "Could not open tests\n");
         exit(1);

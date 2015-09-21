@@ -2,11 +2,11 @@ SRCS := $(wildcard *.c)
 OBJS := $(SRCS:%.c=obj/%.o)
 DEPS := $(OBJS:obj/%.o=obj/%.d)
 
-all: test
-	@#valgrind --dsymutil=yes --leak-check=full ./test
-	./test
+all: enginetest
+	@#valgrind --dsymutil=yes --leak-check=full ./enginetest enginetests
+	./enginetest enginetests
 
-test: obj/libengine.a obj/test.o
+enginetest: obj/libengine.a obj/enginetest.o
 	$(CC) -o $@ $^
 
 obj/libengine.a: obj/tokeniser.o obj/nfa.o obj/engine.o
