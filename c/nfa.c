@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tokeniser.c"
+
 enum state_type {
     STATE_ATOM,
     STATE_SPLIT,

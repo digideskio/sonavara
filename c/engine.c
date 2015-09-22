@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "nfa.c"
 #include "engine.h"
 
 struct regex {

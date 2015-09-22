@@ -9,11 +9,10 @@ all: enginetest
 enginetest: obj/engine.o obj/enginetest.o
 	$(CC) -o $@ $^
 
-obj/enginetest.o: enginetest.c
-	$(CC) -Wall -g -c -o $@ $^
+-include $(DEPS)
 
-obj/engine.o: tokeniser.c nfa.c engine.c
-	cat $^ | $(CC) -Wall -g -c -o $@ -x c -
+obj/%.o: %.c
+	$(CC) -Wall -g -c -o $@ -MMD $<
 
 clean:
 	-rm enginetest $(OBJS) $(DEPS)
