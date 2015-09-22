@@ -113,7 +113,7 @@ def compile(input, output=None):
 
 
 def main():
-    return 0
+    compile(sys.stdin.read(), sys.stdout.buffer)
 
 
 if __name__ == '__main__':
