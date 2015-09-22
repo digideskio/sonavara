@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "engine.h"
+#ifndef NO_SELF_CHAIN
+#include "engine.c"
+#endif
 
 struct lexer_rule {
     char const *pattern;

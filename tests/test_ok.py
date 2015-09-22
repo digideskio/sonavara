@@ -8,7 +8,8 @@ class SonavaraLexer:
         pass
 
     def test(self, input, tokens, error=False):
-        compile(input)
+        with subprocess.Popen(['gcc', '-DNO_SELF_CHAIN', '-o', '/tmp/a.out', '-Wall', '-g', '-x', 'c', '-'], stdin=subprocess.PIPE) as p:
+            compile(input, p.stdin)
         import sys
         sys.exit(1)
         # subprocess.run

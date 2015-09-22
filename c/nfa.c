@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef NO_SELF_CHAIN
 #include "tokeniser.c"
+#endif
 
 enum state_type {
     STATE_ATOM,

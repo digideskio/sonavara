@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef NO_SELF_CHAIN
 #include "nfa.c"
+#endif
 
 typedef struct regex {
     struct state *entry;
