@@ -19,7 +19,7 @@ def write_prelude(output):
         output = io.BytesIO()
 
     for filename in sources:
-        output.write(resource_string('c', filename))
+        output.write(resource_string('sonavara.c', filename))
 
     output.write(b"\n")
 

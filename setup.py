@@ -1,4 +1,5 @@
 import sys
+from setuptools import find_packages
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
 
@@ -19,7 +20,6 @@ class PyTest(TestCommand):
         import pytest
         sys.exit(pytest.main(self.pytest_args))
 
-
 setup(
     name="sonavara",
     description="?",
@@ -27,9 +27,13 @@ setup(
     author_email="yuki@kivikakk.ee",
     license="kindest",
     version="0.1",
-    packages=["sonavara"],
     entry_points={"console_scripts": ["sonavara = sonavara.main:main"]},
     install_requires=[],
     tests_require=['pytest'],
     cmdclass={'test': PyTest},
+    zip_safe=True,
+    packages=find_packages(),
+    package_data={
+        'sonavara': ['c/tokeniser.c', 'c/nfa.c', 'c/engine.c', 'c/lexer.c'],
+    },
 )
