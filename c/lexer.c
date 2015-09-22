@@ -1,27 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "engine.h"
 
-int identifier(char const *match) {
+int identifier(char *match) {
+    printf("identifier: %s\n", match);
     return 1;
 }
 
-int equals(char const *match) {
+int equals(char *match) {
     return 2;
 }
 
-int number(char const *match) {
+int number(char *match) {
+    printf("number: %s\n", match);
     return 3;
 }
 
-int plus(char const *match) {
+int plus(char *match) {
     return 4;
 }
 
 struct lexer_rule {
     char const *pattern;
-    int (*action)(char const *match);
+    int (*action)(char *match);
     struct regex *re;
 } rules[] = {
     {"[[:alpha:]][[:alnum:]_]*", identifier},
@@ -67,7 +70,11 @@ start:
             goto start;
         }
 
-        return rule->action(lexer->src - len);
+        char *match = strndup(lexer->src - len, len);
+        int token = rule->action(match);
+        free(match);
+
+        return token;
     }
 
     return 0;
