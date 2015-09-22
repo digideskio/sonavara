@@ -1,9 +1,18 @@
+import subprocess
+
+from sonavara.main import compile
+
+
 class SonavaraLexer:
     def __init__(self, code):
         pass
 
     def test(self, input, tokens, error=False):
-        pass
+        compile(input)
+        import sys
+        sys.exit(1)
+        # subprocess.run
+        # pass
 
 
 def test_thing():

@@ -1,7 +1,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nfa.h"
+enum state_type {
+    STATE_ATOM,
+    STATE_SPLIT,
+    STATE_MATCH,
+    STATE_MARK
+};
+
+struct state {
+    enum state_type type;
+    union {
+        unsigned char atom[BITNSLOTS(256)];
+    };
+    struct state *o1, *o2;
+};
 
 struct ptrlist {
     struct state **s;
@@ -14,16 +27,16 @@ struct frag {
     struct frag *prev;
 };
 
-struct state matchstate = { STATE_MATCH };
+static struct state matchstate = { STATE_MATCH };
 
-struct ptrlist *ptrlist_alloc(struct state **s) {
+static struct ptrlist *ptrlist_alloc(struct state **s) {
     struct ptrlist *l = malloc(sizeof(*l));
     l->s = s;
     l->next = NULL;
     return l;
 }
 
-void ptrlist_patch(struct ptrlist *l, struct state *s) {
+static void ptrlist_patch(struct ptrlist *l, struct state *s) {
     struct ptrlist *next;
     for (struct ptrlist *i = l; i; i = next) {
         next = i->next;
@@ -32,7 +45,7 @@ void ptrlist_patch(struct ptrlist *l, struct state *s) {
     }
 }
 
-struct ptrlist *ptrlist_concat(struct ptrlist *l1, struct ptrlist *l2) {
+static struct ptrlist *ptrlist_concat(struct ptrlist *l1, struct ptrlist *l2) {
     struct ptrlist *oldl1 = l1;
 
     while (l1->next) {
@@ -42,7 +55,7 @@ struct ptrlist *ptrlist_concat(struct ptrlist *l1, struct ptrlist *l2) {
     return oldl1;
 }
 
-struct frag *frag(struct state *start, struct ptrlist *out, struct frag *prev) {
+static struct frag *frag(struct state *start, struct ptrlist *out, struct frag *prev) {
     struct frag *frag = malloc(sizeof(*frag));
     frag->start = start;
     frag->out = out;
@@ -50,11 +63,11 @@ struct frag *frag(struct state *start, struct ptrlist *out, struct frag *prev) {
     return frag;
 }
 
-void frag_push(struct frag **stackp, struct state *start, struct ptrlist *out) {
+static void frag_push(struct frag **stackp, struct state *start, struct ptrlist *out) {
     *stackp = frag(start, out, *stackp);
 }
 
-struct frag frag_pop(struct frag **stackp) {
+static struct frag frag_pop(struct frag **stackp) {
     struct frag frag = **stackp;
     free(*stackp);
     *stackp = frag.prev;
@@ -63,7 +76,7 @@ struct frag frag_pop(struct frag **stackp) {
 }
 
 
-struct state *state(enum state_type type, struct state *o1, struct state *o2) {
+static struct state *state(enum state_type type, struct state *o1, struct state *o2) {
     struct state *s = malloc(sizeof(*s));
     s->type = type;
     s->o1 = o1;
@@ -71,7 +84,7 @@ struct state *state(enum state_type type, struct state *o1, struct state *o2) {
     return s;
 }
 
-void state_mark_recursive(struct state *s) {
+static void state_mark_recursive(struct state *s) {
     if (!s || s == &matchstate) {
         return;
     }
@@ -91,7 +104,7 @@ void state_mark_recursive(struct state *s) {
     state_mark_recursive(s->o2);
 }
 
-void state_free_recursive(struct state *s) {
+static void state_free_recursive(struct state *s) {
     if (!s || s == &matchstate) {
         return;
     }
@@ -101,12 +114,12 @@ void state_free_recursive(struct state *s) {
     free(s);
 }
 
-void state_free(struct state *s) {
+static void state_free(struct state *s) {
     state_mark_recursive(s);
     state_free_recursive(s);
 }
 
-struct state *token2nfa(struct regex_token *token) {
+static struct state *token2nfa(struct regex_token *token) {
     if (!token) {
         return NULL;
     }

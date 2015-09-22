@@ -4,36 +4,14 @@
 
 #include "engine.h"
 
-int identifier(char *match) {
-    printf("identifier: %s\n", match);
-    return 1;
-}
-
-int equals(char *match) {
-    return 2;
-}
-
-int number(char *match) {
-    printf("number: %s\n", match);
-    return 3;
-}
-
-int plus(char *match) {
-    return 4;
-}
-
 struct lexer_rule {
     char const *pattern;
     int (*action)(char *match);
+
     struct regex *re;
-} rules[] = {
-    {"[[:alpha:]][[:alnum:]_]*", identifier},
-    {"=", equals},
-    {"[[:digit:]]+", number},
-    {"\\+", plus},
-    {"[[:space:]]+", NULL},
-    {NULL, NULL},
 };
+
+extern struct lexer_rule rules[];
 
 struct lexer {
     char const *src;
@@ -82,24 +60,6 @@ start:
 
 void lexer_free(struct lexer *lexer) {
     free(lexer);
-}
-
-int main(int argc, char **argv) {
-    struct lexer *lexer = lexer_start("a = 1 + 2");
-
-    while (1) {
-        int t = lexer_lex(lexer);
-        if (!t) {
-            printf("EOF\n");
-            break;
-        }
-
-        printf("token: %d\n", t);
-    }
-
-    lexer_free(lexer);
-
-    return 0;
 }
 
 /* vim: set sw=4 et: */

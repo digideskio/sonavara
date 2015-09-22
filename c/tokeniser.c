@@ -1,9 +1,30 @@
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "tokeniser.h"
+#define BITMASK(b) (1 << ((b) % CHAR_BIT))
+#define BITSLOT(b) ((b) / CHAR_BIT)
+#define BITSET(a, b) ((a)[BITSLOT(b)] |= BITMASK(b))
+#define BITCLEAR(a, b) ((a)[BITSLOT(b)] &= ~BITMASK(b))
+#define BITTEST(a, b) ((a)[BITSLOT(b)] & BITMASK(b))
+#define BITNSLOTS(nb) (((nb) + CHAR_BIT - 1) / CHAR_BIT)
+
+enum regex_token_type {
+    TYPE_ATOM,
+    TYPE_CONCAT,
+    TYPE_ALTERNATIVE,
+    TYPE_ZERO_MANY,
+    TYPE_ONE_MANY,
+    TYPE_ZERO_ONE,
+};
+
+struct regex_token {
+    enum regex_token_type type;
+    unsigned char atom[BITNSLOTS(256)];
+    struct regex_token *next;
+};
 
 struct paren {
     int nalt;
@@ -13,14 +34,14 @@ struct paren {
     struct paren *prev;
 };
 
-void token_append(struct regex_token ***writep, enum regex_token_type type) {
+static void token_append(struct regex_token ***writep, enum regex_token_type type) {
     **writep = malloc(sizeof(***writep));
     (**writep)->type = type;
     (**writep)->next = NULL;
     *writep = &((**writep)->next);
 }
 
-void token_append_atom(struct regex_token ***writep, unsigned char *atom) {
+static void token_append_atom(struct regex_token ***writep, unsigned char *atom) {
     **writep = malloc(sizeof(***writep));
     (**writep)->type = TYPE_ATOM;
     memcpy((**writep)->atom, atom, BITNSLOTS(256));
@@ -28,7 +49,7 @@ void token_append_atom(struct regex_token ***writep, unsigned char *atom) {
     *writep = &((**writep)->next);
 }
 
-void token_free(struct regex_token *token) {
+static void token_free(struct regex_token *token) {
     while (token) {
         struct regex_token *next = token->next;
         free(token);
@@ -36,7 +57,7 @@ void token_free(struct regex_token *token) {
     }
 }
 
-void paren_free(struct paren *paren) {
+static void paren_free(struct paren *paren) {
     while (paren) {
         struct paren *prev = paren->prev;
         free(paren);
@@ -44,7 +65,7 @@ void paren_free(struct paren *paren) {
     }
 }
 
-int process_escape(char const **pattern) {
+static int process_escape(char const **pattern) {
     int v = 0;
 
     if (**pattern >= '0' && **pattern <= '7') {
@@ -128,19 +149,19 @@ struct tokeniser {
     unsigned char cclass_atom_parent[BITNSLOTS(256)];
 };
 
-int process(struct tokeniser *sp, char const *pattern, char const *stop);
-int tokenise_default(struct tokeniser *sp, char const **pattern);
-int tokenise_paren_opts(struct tokeniser *sp, int v, int disable);
-int tokenise_escape(struct tokeniser *sp, char const **pattern);
-int tokenise_brace_pre_comma(struct tokeniser *sp, int v);
-int tokenise_brace_post_comma(struct tokeniser *sp, int v);
-int tokenise_cclass_start(struct tokeniser *sp, char const **pattern);
-int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern);
-int tokenise_cclass_range(struct tokeniser *sp, char const **pattern);
-int tokenise_cclass_post(struct tokeniser *sp, char const **pattern);
-void cclass_post_cleanup(struct tokeniser *sp);
+static int process(struct tokeniser *sp, char const *pattern, char const *stop);
+static int tokenise_default(struct tokeniser *sp, char const **pattern);
+static int tokenise_paren_opts(struct tokeniser *sp, int v, int disable);
+static int tokenise_escape(struct tokeniser *sp, char const **pattern);
+static int tokenise_brace_pre_comma(struct tokeniser *sp, int v);
+static int tokenise_brace_post_comma(struct tokeniser *sp, int v);
+static int tokenise_cclass_start(struct tokeniser *sp, char const **pattern);
+static int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern);
+static int tokenise_cclass_range(struct tokeniser *sp, char const **pattern);
+static int tokenise_cclass_post(struct tokeniser *sp, char const **pattern);
+static void cclass_post_cleanup(struct tokeniser *sp);
 
-struct regex_token *tokenise(char const *pattern) {
+static struct regex_token *tokenise(char const *pattern) {
     struct regex_token *r = NULL;
 
     struct tokeniser s;
@@ -181,7 +202,7 @@ struct regex_token *tokenise(char const *pattern) {
     return r;
 }
 
-int process(struct tokeniser *sp, char const *pattern, char const *stop) {
+static int process(struct tokeniser *sp, char const *pattern, char const *stop) {
     for (; pattern != stop && *pattern; ++pattern) {
         int abort = 0,
             v = *pattern;
@@ -275,7 +296,7 @@ int process(struct tokeniser *sp, char const *pattern, char const *stop) {
     return 1;
 }
 
-int tokenise_default(struct tokeniser *sp, char const **pattern) {
+static int tokenise_default(struct tokeniser *sp, char const **pattern) {
     unsigned char atom[BITNSLOTS(256)];
 
     switch (**pattern) {
@@ -436,7 +457,7 @@ int tokenise_default(struct tokeniser *sp, char const **pattern) {
     return 1;
 }
 
-int tokenise_paren_opts(struct tokeniser *sp, int v, int disable) {
+static int tokenise_paren_opts(struct tokeniser *sp, int v, int disable) {
     int opt = 0;
 
     if (v == ':') {
@@ -468,7 +489,7 @@ int tokenise_paren_opts(struct tokeniser *sp, int v, int disable) {
     return 1;
 }
 
-int tokenise_escape(struct tokeniser *sp, char const **pattern) {
+static int tokenise_escape(struct tokeniser *sp, char const **pattern) {
     sp->state = DEFAULT;
 
     if (sp->natom > 1) {
@@ -494,7 +515,7 @@ int tokenise_escape(struct tokeniser *sp, char const **pattern) {
     return 1;
 }
 
-int tokenise_brace_pre_comma(struct tokeniser *sp, int v) {
+static int tokenise_brace_pre_comma(struct tokeniser *sp, int v) {
     if (v == ',') {
         sp->state = BRACE_POST_COMMA;
         return 1;
@@ -532,7 +553,7 @@ int tokenise_brace_pre_comma(struct tokeniser *sp, int v) {
     return 1;
 }
 
-int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
+static int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
     if (v == '}') {
         sp->state = DEFAULT;
 
@@ -602,7 +623,7 @@ int tokenise_brace_post_comma(struct tokeniser *sp, int v) {
     return 1;
 }
 
-int tokenise_cclass_start(struct tokeniser *sp, char const **pattern) {
+static int tokenise_cclass_start(struct tokeniser *sp, char const **pattern) {
     sp->state = CCLASS_MID;
 
     if (**pattern == '^') {
@@ -613,7 +634,7 @@ int tokenise_cclass_start(struct tokeniser *sp, char const **pattern) {
     return tokenise_cclass_mid(sp, pattern);
 }
 
-struct cclass_fn {
+static struct cclass_fn {
     char const *match;
     int (*fn)(int);
 } cclass_fns[] = {
@@ -632,7 +653,7 @@ struct cclass_fn {
     {NULL, NULL},
 };
 
-int attempt_cclass_expr(struct tokeniser *sp, char const **pattern) {
+static int attempt_cclass_expr(struct tokeniser *sp, char const **pattern) {
     *pattern += 2;
 
     int negate = **pattern == '^';
@@ -675,7 +696,7 @@ int attempt_cclass_expr(struct tokeniser *sp, char const **pattern) {
     return 0;
 }
 
-int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
+static int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
     switch (**pattern) {
     case '\\':
         sp->state = CCLASS_ESCAPE;
@@ -736,7 +757,7 @@ int tokenise_cclass_mid(struct tokeniser *sp, char const **pattern) {
     return 1;
 }
 
-int tokenise_cclass_range(struct tokeniser *sp, char const **pattern) {
+static int tokenise_cclass_range(struct tokeniser *sp, char const **pattern) {
     if (**pattern == ']') {
         BITSET(sp->cclass_atom, **pattern);
         return tokenise_cclass_mid(sp, pattern);
@@ -756,7 +777,7 @@ int tokenise_cclass_range(struct tokeniser *sp, char const **pattern) {
     return 1;
 }
 
-int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
+static int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
     if (strncmp(*pattern, "{-}", 3) == 0) {
         *pattern += 2;
         sp->state = BRACE_CCLASS_SUBTRACT;
@@ -774,7 +795,7 @@ int tokenise_cclass_post(struct tokeniser *sp, char const **pattern) {
     return tokenise_default(sp, pattern);
 }
 
-void cclass_post_cleanup(struct tokeniser *sp) {
+static void cclass_post_cleanup(struct tokeniser *sp) {
     if (sp->natom > 1) {
         --sp->natom;
         token_append(&sp->write, TYPE_CONCAT);

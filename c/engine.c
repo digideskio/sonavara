@@ -2,8 +2,6 @@
 #include <string.h>
 
 #include "engine.h"
-#include "tokeniser.h"
-#include "nfa.h"
 
 struct regex {
     struct state *entry;
@@ -37,14 +35,14 @@ void regex_free(regex_t *re) {
     free(re);
 }
 
-void state_list_prepend(struct state_list **l, struct state *s) {
+static void state_list_prepend(struct state_list **l, struct state *s) {
     struct state_list *nl = malloc(sizeof(*nl));
     nl->s = s;
     nl->next = *l;
     *l = nl;
 }
 
-void state_list_free(struct state_list *clist) {
+static void state_list_free(struct state_list *clist) {
     while (clist) {
         struct state_list *next = clist->next;
         free(clist);
@@ -52,7 +50,7 @@ void state_list_free(struct state_list *clist) {
     }
 }
 
-int state_list_add(struct state_list **l, struct state *s) {
+static int state_list_add(struct state_list **l, struct state *s) {
     /* Return true if any added state is STATE_MATCH. */
 
     if (!s) {
@@ -69,7 +67,7 @@ int state_list_add(struct state_list **l, struct state *s) {
     return s->type == STATE_MATCH;
 }
 
-int step(struct state_list *clist, int c, struct state_list **nlist) {
+static int step(struct state_list *clist, int c, struct state_list **nlist) {
     /* Return true if any state added to nlist is STATE_MATCH. */
 
     int r = 0;
@@ -86,7 +84,7 @@ int step(struct state_list *clist, int c, struct state_list **nlist) {
     return r;
 }
 
-int match(regex_t *re, char const *s, int prefix) {
+static int match(regex_t *re, char const *s, int prefix) {
     /* If !prefix, we return 1 or 0 if we match the entire string or not.
      * If prefix, we return the number of characters that generate a match,
      * which may be 0.  If there's no match, return -1. */

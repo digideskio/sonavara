@@ -2,24 +2,18 @@ SRCS := $(wildcard *.c)
 OBJS := $(SRCS:%.c=obj/%.o)
 DEPS := $(OBJS:obj/%.o=obj/%.d)
 
-all: lexer
-	./lexer
-
-enginetest: obj/libengine.a obj/enginetest.o
-	$(CC) -o $@ $^
+all: enginetest
 	@#valgrind --dsymutil=yes --leak-check=full ./enginetest enginetests
 	./enginetest enginetests
 
-lexer: obj/libengine.a obj/lexer.o
+enginetest: obj/engine.o obj/enginetest.o
 	$(CC) -o $@ $^
 
-obj/libengine.a: obj/tokeniser.o obj/nfa.o obj/engine.o
-	$(AR) rcs $@ $^
+obj/enginetest.o: enginetest.c
+	$(CC) -Wall -g -c -o $@ $^
 
--include $(DEPS)
-
-obj/%.o: %.c
-	$(CC) -Wall -g -c -o $@ -MMD $<
+obj/engine.o: tokeniser.c nfa.c engine.c
+	cat $^ | $(CC) -Wall -g -c -o $@ -x c -
 
 clean:
-	-rm test $(OBJS) $(DEPS)
+	-rm enginetest $(OBJS) $(DEPS)
