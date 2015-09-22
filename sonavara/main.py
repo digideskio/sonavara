@@ -19,6 +19,28 @@ def compile(input, output=None):
 
     output.write(b"\n")
 
+    fns = [
+        (b"abc", b"return 1;"),
+    ]
+
+    for i, (pattern, body) in enumerate(fns):
+        output.write(b"static int lexer_fn_")
+        output.write(str(i).encode('ascii'))
+        output.write(b"(char *match) {\n")
+        output.write(body)
+        output.write(b"\n}\n")
+
+    output.write(b"struct lexer_rule rules[] = {\n")
+    for i, (pattern, body) in enumerate(fns):
+        output.write(b"    {\"")
+        output.write(pattern)
+        output.write(b"\", lexer_fn_")
+        output.write(str(i).encode('ascii'))
+        output.write(b"},\n")
+
+    output.write(b"    {NULL, NULL},\n")
+    output.write(b"};\n")
+
     if isinstance(output, io.BytesIO):
         v = output.getvalue()
         output.close()
