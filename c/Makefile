@@ -6,7 +6,7 @@ all: enginetest
 	@#valgrind --dsymutil=yes --leak-check=full ./enginetest enginetests
 	./enginetest enginetests
 
-enginetest: obj/engine.o obj/enginetest.o
+enginetest: obj/enginetest.o
 	$(CC) -o $@ $^
 
 -include $(DEPS)

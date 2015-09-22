@@ -1,12 +1,14 @@
+#ifndef SONAVARA_ENGINE_INCLUDED
+#define SONAVARA_ENGINE_INCLUDED
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "nfa.c"
-#include "engine.h"
 
-struct regex {
+typedef struct regex {
     struct state *entry;
-};
+} regex_t;
 
 struct state_list {
     struct state *s;
@@ -138,5 +140,7 @@ int regex_match(regex_t *re, char const *s) {
 int regex_match_prefix(regex_t *re, char const *s) {
     return match(re, s, 1);
 }
+
+#endif
 
 /* vim: set sw=4 et: */

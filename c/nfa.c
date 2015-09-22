@@ -1,3 +1,6 @@
+#ifndef SONAVARA_NFA_INCLUDED
+#define SONAVARA_NFA_INCLUDED
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -179,5 +182,7 @@ static struct state *token2nfa(struct regex_token *token) {
 
     return e1.start;
 }
+
+#endif
 
 /* vim: set sw=4 et: */

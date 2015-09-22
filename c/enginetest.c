@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "engine.h"
+#include "engine.c"
 
 int main(int argc, char **argv) {
     FILE *f = fopen(argv[1], "r");

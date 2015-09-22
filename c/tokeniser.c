@@ -1,3 +1,6 @@
+#ifndef SONAVARA_TOKENISER_INCLUDED
+#define SONAVARA_TOKENISER_INCLUDED
+
 #include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
@@ -805,5 +808,7 @@ static void cclass_post_cleanup(struct tokeniser *sp) {
     ++sp->natom;
     sp->state = DEFAULT;
 }
+
+#endif
 
 /* vim: set sw=4 et: */
