@@ -3,7 +3,10 @@ import sys
 from pkg_resources import resource_string
 
 
-def compile(input, output=None):
+__all__ = ['compile']
+
+
+def write_prelude(output):
     sources = [
         'tokeniser.c',
         'nfa.c',
@@ -19,9 +22,14 @@ def compile(input, output=None):
 
     output.write(b"\n")
 
-    fns = [
-        (b"abc", b"return 1;"),
-    ]
+
+def parse(input):
+    return []
+
+
+def compile(input, output=None):
+    write_prelude(output)
+    fns = parse(input)
 
     for i, (pattern, body) in enumerate(fns):
         output.write(b"static int lexer_fn_")

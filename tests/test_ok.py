@@ -1,6 +1,8 @@
 import os
-import subprocess
 import tempfile
+from subprocess import PIPE
+from subprocess import Popen
+from subprocess import TimeoutExpired
 
 from sonavara.main import compile
 
@@ -8,14 +10,20 @@ from sonavara.main import compile
 class SonavaraLexer:
     def __init__(self, code):
         self.code = code
+
+    def __enter__(self):
         self.compile()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.cleanup()
 
     def compile(self):
         f, name = tempfile.mkstemp()
         self.name = name
         os.close(f)
 
-        p = subprocess.Popen(['gcc', '-DNO_SELF_CHAIN', '-o', self.name, '-Wall', '-g', '-x', 'c', '-'], stdin=subprocess.PIPE)
+        p = Popen(['gcc', '-DNO_SELF_CHAIN', '-o', self.name, '-Wall', '-g', '-x', 'c', '-'], stdin=PIPE)
         compile(self.code, p.stdin)
         p.stdin.write(b"""
             int main(int argc, char **argv) {
@@ -41,13 +49,17 @@ class SonavaraLexer:
         assert p.wait() == 0
 
     def cleanup(self):
-        os.unlink(self.name)
+        if self.name:
+            try:
+                os.unlink(self.name)
+            except OSError:
+                pass
 
     def test(self, input, tokens, error=False):
-        p = subprocess.Popen([self.name], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = Popen([self.name], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         try:
             out, errs = p.communicate(input.encode('utf8'), timeout=10)
-        except subprocess.TimeoutExpired:
+        except TimeoutExpired:
             p.kill()
             out, errs = p.communicate()
 
@@ -57,9 +69,6 @@ class SonavaraLexer:
 
 
 def test_thing():
-    sv = SonavaraLexer("""abc           return 1;""")
-    try:
+    with SonavaraLexer("""abc           return 1;""") as sv:
         sv.test("abc", [1])
         sv.test("ab", [], True)
-    finally:
-        sv.cleanup()
