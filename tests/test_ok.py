@@ -79,3 +79,4 @@ def
         sv.test("abc", [1])
         sv.test("ab", [], True)
         sv.test("defabc", [2, 1])
+        sv.test("defab", [2], True)
