@@ -69,6 +69,13 @@ class SonavaraLexer:
 
 
 def test_thing():
-    with SonavaraLexer("""abc           return 1;""") as sv:
+    with SonavaraLexer("""
+abc
+    return 1;
+
+def
+    return 2;
+""") as sv:
         sv.test("abc", [1])
         sv.test("ab", [], True)
+        sv.test("defabc", [2, 1])
