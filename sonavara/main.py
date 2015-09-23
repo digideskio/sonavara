@@ -7,7 +7,7 @@ from pkg_resources import resource_string
 __all__ = ['compile']
 
 
-def write_prelude(output):
+def write_prelude(output, context):
     sources = [
         'tokeniser.c',
         'nfa.c',
@@ -16,12 +16,48 @@ def write_prelude(output):
     ]
 
     if output is None:
-        output = io.BytesIO()
+        output = io.StringIO()
 
     for filename in sources:
-        output.write(resource_string('sonavara.c', filename))
+        output.write(resource_string('sonavara.c', filename).decode('utf8'))
 
-    output.write(b"\n")
+    output.write("\n")
+
+    if context:
+        output.write("struct {};\n".format(context))
+
+    output.write("int lexer_lex(struct lexer *lexer{}) {{\n".format(", struct {} *context".format(context) if context else ""))
+    output.write("""
+start:
+    if (*lexer->src == 0) {
+        return 0;
+    }
+
+    for (struct lexer_rule *rule = rules; rule->pattern; ++rule) {
+        int len = regex_match_prefix(rule->re, lexer->src);
+        if (len <= 0) {
+            continue;
+        }
+
+        lexer->src += len;
+        if (!rule->action) {
+            goto start;
+        }
+
+        char *match = strndup(lexer->src - len, len);
+""")
+    output.write("int token = rule->action(match, {});\n".format("context" if context else "NULL"))
+    output.write("""
+        free(match);
+
+        return token;
+    }
+
+    return -1;
+}
+    """)
+
+    output.write("\n")
 
 
 class Parser:
@@ -29,7 +65,7 @@ class Parser:
         if not self.current_action:
             return
 
-        self.result.append((self.current_action.encode('utf8'), self.current_action_io.getvalue().encode('utf8')))
+        self.result['fns'].append((self.current_action, self.current_action_io.getvalue()))
         self.current_action_io.close()
         self.current_action_io = None
 
@@ -39,6 +75,17 @@ class Parser:
 
         if re.match(r'^\s', line):
             raise ValueError("Found action {} in base state".format(repr(line)))
+
+        option = re.match('^\*set\s+(\w+)\s*=(.+)$', line)
+        if option:
+            key, value = option.groups()
+            value = value.strip()
+
+            if key == 'context':
+                self.result['context'] = value
+            else:
+                raise ValueError(key)
+            return
 
         self.state = 'action'
         self.current_action = line.rstrip('\n')
@@ -71,7 +118,9 @@ class Parser:
         self.current_action_io = None
         self.offset = None
 
-        self.result = []
+        self.result = {
+            'fns': [],
+        }
 
         for line in io.StringIO(input):
             if self.state == 'base':
@@ -85,35 +134,34 @@ class Parser:
 
 
 def compile(input, output=None):
-    write_prelude(output)
-    fns = Parser().parse(input)
+    parsed = Parser().parse(input)
+    write_prelude(output, parsed.get('context'))
 
-    for i, (pattern, body) in enumerate(fns):
-        output.write(b"static int lexer_fn_")
-        output.write(str(i).encode('ascii'))
-        output.write(b"(char *match) {\n")
+    for i, (pattern, body) in enumerate(parsed['fns']):
+        output.write("static int lexer_fn_{}(char *match, void *_context) {{\n".format(i))
+        if 'context' in parsed:
+            output.write("#pragma GCC diagnostic push\n")
+            output.write("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n")
+            output.write("    struct {} *context = _context;\n".format(parsed['context']))
+            output.write("#pragma GCC diagnostic pop\n")
         output.write(body)
-        output.write(b"\n}\n")
+        output.write("\n}\n")
 
-    output.write(b"struct lexer_rule rules[] = {\n")
-    for i, (pattern, body) in enumerate(fns):
-        output.write(b"    {\"")
-        output.write(pattern)
-        output.write(b"\", lexer_fn_")
-        output.write(str(i).encode('ascii'))
-        output.write(b"},\n")
+    output.write("struct lexer_rule rules[] = {\n")
+    for i, (pattern, body) in enumerate(parsed['fns']):
+        output.write("    {{\"{}\", lexer_fn_{}}},\n".format(pattern, i))
 
-    output.write(b"    {NULL, NULL},\n")
-    output.write(b"};\n")
+    output.write("    {NULL, NULL},\n")
+    output.write("};\n")
 
-    if isinstance(output, io.BytesIO):
+    if isinstance(output, io.StringIO):
         v = output.getvalue()
         output.close()
         return v
 
 
 def main():
-    compile(sys.stdin.read(), sys.stdout.buffer)
+    compile(sys.stdin.read(), sys.stdout)
 
 
 if __name__ == '__main__':

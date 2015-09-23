@@ -8,7 +8,7 @@
 
 struct lexer_rule {
     char const *pattern;
-    int (*action)(char *match);
+    int (*action)(char *match, void *_context);
 
     struct regex *re;
 };
@@ -73,33 +73,6 @@ struct lexer *lexer_start_file(FILE *file) {
     return lexer;
 }
 
-
-int lexer_lex(struct lexer *lexer) {
-start:
-    if (*lexer->src == 0) {
-        return 0;
-    }
-
-    for (struct lexer_rule *rule = rules; rule->pattern; ++rule) {
-        int len = regex_match_prefix(rule->re, lexer->src);
-        if (len <= 0) {
-            continue;
-        }
-
-        lexer->src += len;
-        if (!rule->action) {
-            goto start;
-        }
-
-        char *match = strndup(lexer->src - len, len);
-        int token = rule->action(match);
-        free(match);
-
-        return token;
-    }
-
-    return -1;
-}
 
 void lexer_free(struct lexer *lexer) {
     free(lexer->buffer);

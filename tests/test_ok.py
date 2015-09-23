@@ -1,3 +1,4 @@
+import codecs
 import os
 import tempfile
 from subprocess import PIPE
@@ -8,8 +9,9 @@ from sonavara.main import compile
 
 
 class SonavaraLexer:
-    def __init__(self, code):
+    def __init__(self, *, code, context=False):
         self.code = code
+        self.context = context
 
     def __enter__(self):
         self.compile()
@@ -24,13 +26,25 @@ class SonavaraLexer:
         os.close(f)
 
         p = Popen(['gcc', '-DNO_SELF_CHAIN', '-o', self.name, '-Wall', '-g', '-x', 'c', '-'], stdin=PIPE)
-        compile(self.code, p.stdin)
+        compile(self.code, codecs.getwriter('utf8')(p.stdin))
         p.stdin.write(b"""
+            struct lexer_context {
+                char *saved;
+            };
+
             int main(int argc, char **argv) {
                 struct lexer *lexer = lexer_start_file(stdin);
 
+                struct lexer_context context;
+
                 while (1) {
-                    int t = lexer_lex(lexer);
+""")
+        if self.context:
+            p.stdin.write(b"int t = lexer_lex(lexer, &context);\n")
+        else:
+            p.stdin.write(b"int t = lexer_lex(lexer);\n")
+
+        p.stdin.write(b"""
                     if (t == -1) {
                         lexer_free(lexer);
                         return 1;
@@ -68,8 +82,24 @@ class SonavaraLexer:
         assert errs == b""
 
 
-def test_thing():
-    with SonavaraLexer("""
+def test_base():
+    with SonavaraLexer(code="""
+abc
+    return 1;
+
+def
+    return 2;
+""") as sv:
+        sv.test("abc", [1])
+        sv.test("ab", [], True)
+        sv.test("defabc", [2, 1])
+        sv.test("defab", [2], True)
+
+
+def test_context():
+    with SonavaraLexer(context=True, code="""
+*set context = lexer_context
+
 abc
     return 1;
 
