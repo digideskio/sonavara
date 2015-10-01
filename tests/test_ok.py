@@ -130,6 +130,8 @@ abc
 
 def
     return 2;
+
+*#x
 """) as sv:
         sv.test("abc", [1, "got abc"])
         sv.test("ab", [], True)

@@ -64,6 +64,7 @@ class Parser:
 
         self.result['fns'].append((self.current_action, self.current_action_io.getvalue()))
         self.current_action_io.close()
+        self.current_action = None
         self.current_action_io = None
 
     def handle_base(self, line):
@@ -86,6 +87,9 @@ class Parser:
 
         if line.strip() == '*raw':
             self.state = 'raw'
+            return
+
+        if line.startswith('*#'):
             return
 
         self.state = 'action'
