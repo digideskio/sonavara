@@ -91,7 +91,6 @@ class Parser:
         self.state = 'action'
         self.current_action = line.rstrip('\n')
         self.current_action_io = io.StringIO()
-        self.offset = None
         while self.current_action[-1] == ' ' and self.current_action[-2] != "\\":
             self.current_action = self.current_action[:-1]
 
@@ -111,16 +110,10 @@ class Parser:
             self.current_action_io.write("\n")
             return
 
-        ws = re.match(r'^\s+', line)
-        if not ws:
+        if not re.match(r'^\s', line):
             self.resolve_current_action()
             self.state = 'base'
             return self.handle_base(line)
-
-        if self.offset is None:
-            self.offset = ws.group(0)
-        elif not line.startswith(self.offset):
-            raise ValueError("Found bad indentation in action {}".format(self.current_action))
 
         self.current_action_io.write(line)
 
@@ -128,7 +121,6 @@ class Parser:
         self.state = 'base'
         self.current_action = None
         self.current_action_io = None
-        self.offset = None
 
         self.result = {
             'fns': [],
