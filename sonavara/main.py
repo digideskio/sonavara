@@ -23,9 +23,6 @@ def write_prelude(output, context):
 
     output.write("\n")
 
-    if context:
-        output.write("struct {};\n".format(context))
-
     output.write("int lexer_lex(struct lexer *lexer{}) {{\n".format(", struct {} *context".format(context) if context else ""))
     output.write("""
 start:
@@ -87,12 +84,27 @@ class Parser:
                 raise ValueError(key)
             return
 
+        if line.strip() == '*raw':
+            self.state = 'raw'
+            return
+
         self.state = 'action'
         self.current_action = line.rstrip('\n')
         self.current_action_io = io.StringIO()
         self.offset = None
         while self.current_action[-1] == ' ' and self.current_action[-2] != "\\":
             self.current_action = self.current_action[:-1]
+
+    def handle_raw(self, line):
+        if line.strip() == '':
+            self.result['raw'] += "\n"
+            return
+
+        if line.strip() and not re.match(r'^\s', line):
+            self.action = 'base'
+            return self.handle_base(line)
+
+        self.result['raw'] += line
 
     def handle_action(self, line):
         if line.strip() == '':
@@ -120,11 +132,14 @@ class Parser:
 
         self.result = {
             'fns': [],
+            'raw': '',
         }
 
         for line in io.StringIO(input):
             if self.state == 'base':
                 self.handle_base(line)
+            elif self.state == 'raw':
+                self.handle_raw(line)
             elif self.state == 'action':
                 self.handle_action(line)
 
@@ -135,6 +150,7 @@ class Parser:
 
 def compile(input, output=None):
     parsed = Parser().parse(input)
+    output.write(parsed['raw'])
     write_prelude(output, parsed.get('context'))
 
     for i, (pattern, body) in enumerate(parsed['fns']):

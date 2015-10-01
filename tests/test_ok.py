@@ -28,14 +28,13 @@ class SonavaraLexer:
         p = Popen(['gcc', '-DNO_SELF_CHAIN', '-o', self.name, '-Wall', '-g', '-x', 'c', '-'], stdin=PIPE)
         compile(self.code, codecs.getwriter('utf8')(p.stdin))
         p.stdin.write(b"""
-            struct lexer_context {
-                char *saved;
-            };
-
             int main(int argc, char **argv) {
                 struct lexer *lexer = lexer_start_file(stdin);
+""")
+        if self.context:
+            p.stdin.write(b"""struct lexer_context context;\n""")
 
-                struct lexer_context context;
+        p.stdin.write(b"""
 
                 while (1) {
 """)
@@ -98,9 +97,15 @@ def
 
 def test_context():
     with SonavaraLexer(context=True, code="""
+*raw
+    struct lexer_context {
+        char *saved;
+    };
+
 *set context = lexer_context
 
 abc
+    context->saved = strdup(match);
     return 1;
 
 def
