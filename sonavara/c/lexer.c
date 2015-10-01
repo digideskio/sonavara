@@ -19,22 +19,24 @@ struct lexer {
     char *buffer;
 };
 
-static void lexer_init(void) {
+static int lexer_init(void) {
     for (struct lexer_rule *rule = rules; rule->pattern; ++rule) {
         if (rule->re) {
-            break;
+            return 1;
         }
 
         rule->re = regex_compile(rule->pattern);
         if (!rule->re) {
-            fprintf(stderr, "failed to compile: %s\n", rule->pattern);
-            exit(1);
+            return 0;
         }
     }
+    return 1;
 }
 
 struct lexer *lexer_start_str(char const *src) {
-    lexer_init();
+    if (!lexer_init()) {
+        return NULL;
+    }
 
     struct lexer *lexer = malloc(sizeof(*lexer));
     lexer->src = src;
