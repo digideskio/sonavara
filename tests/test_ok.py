@@ -25,7 +25,7 @@ class SonavaraLexer:
         self.name = name
         os.close(f)
 
-        p = Popen(['gcc', '-DNO_SELF_CHAIN', '-o', self.name, '-Wall', '-g', '-x', 'c', '-'], stdin=PIPE)
+        p = Popen(['gcc', '-DSONAVARA_INCLUDE_FILE', '-DSONAVARA_NO_SELF_CHAIN', '-o', self.name, '-Wall', '-g', '-x', 'c', '-'], stdin=PIPE)
         compile(self.code, codecs.getwriter('utf8')(p.stdin))
         p.stdin.write(b"""
             int main(int argc, char **argv) {

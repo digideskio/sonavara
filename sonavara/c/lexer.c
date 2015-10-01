@@ -1,8 +1,7 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef NO_SELF_CHAIN
+#ifndef SONAVARA_NO_SELF_CHAIN
 #include "engine.c"
 #endif
 
@@ -43,6 +42,10 @@ struct lexer *lexer_start_str(char const *src) {
     return lexer;
 }
 
+#ifdef SONAVARA_INCLUDE_FILE
+
+#include <stdio.h>
+
 struct lexer *lexer_start_file(FILE *file) {
     int buffersz = 2;
     int n = 0;
@@ -72,6 +75,7 @@ struct lexer *lexer_start_file(FILE *file) {
     lexer->buffer = buffer;
     return lexer;
 }
+#endif
 
 
 void lexer_free(struct lexer *lexer) {
