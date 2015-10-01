@@ -53,8 +53,15 @@ class SonavaraLexer:
                         lexer_free(lexer);
                         return 0;
                     }
-
                     printf("token: %d\\n", t);
+""")
+
+        if self.context:
+            p.stdin.write(b"""
+                    handle_token(t, &context);
+""")
+
+        p.stdin.write(b"""
                 }
             }
         """)
@@ -77,7 +84,10 @@ class SonavaraLexer:
             out, errs = p.communicate()
 
         assert p.returncode == (1 if error else 0)
-        assert out == "".join("token: {}\n".format(token) for token in tokens).encode('utf8')
+        assert out == "".join(
+            "token: {}\n".format(token) if isinstance(token, int) else "{}\n".format(token)
+            for token in tokens
+        ).encode('utf8')
         assert errs == b""
 
 
@@ -98,9 +108,19 @@ def
 def test_context():
     with SonavaraLexer(context=True, code="""
 *raw
+    #include <stdio.h>
+    #include <stdlib.h>
+
     struct lexer_context {
         char *saved;
     };
+
+    void handle_token(int id, struct lexer_context *context) {
+        if (id == 1) {
+            printf("got %s\\n", context->saved);
+            free(context->saved);
+        }
+    }
 
 *set context = lexer_context
 
@@ -111,7 +131,7 @@ abc
 def
     return 2;
 """) as sv:
-        sv.test("abc", [1])
+        sv.test("abc", [1, "got abc"])
         sv.test("ab", [], True)
-        sv.test("defabc", [2, 1])
+        sv.test("defabc", [2, 1, "got abc"])
         sv.test("defab", [2], True)
