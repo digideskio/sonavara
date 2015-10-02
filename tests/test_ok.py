@@ -140,3 +140,20 @@ def
         sv.test("defabc", [2, 1, "got abc"])
         sv.test("def  abc", [2, 1, "got abc"])
         sv.test("defab", [2], True)
+
+
+def test_mode():
+    with SonavaraLexer(code="""
+"
+    BEGIN(string);
+
+*mode string
+
+"
+    END();
+    return 1;
+
+[^"]+
+    return 2;
+""") as sv:
+        sv.test('"abc"', [2, 1])
