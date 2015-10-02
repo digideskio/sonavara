@@ -149,6 +149,10 @@ class Parser:
         return self.result
 
 
+def escape_cstr(s):
+    return re.sub(r"\\", "\\\\\\\\", s)
+
+
 def compile(input, output=None):
     parsed = Parser().parse(input)
     output.write(parsed['raw'])
@@ -169,7 +173,7 @@ def compile(input, output=None):
 
     output.write("struct lexer_rule rules[] = {\n")
     for i, (pattern, body) in enumerate(parsed['fns']):
-        output.write("    {{\"{}\", lexer_fn_{}}},\n".format(pattern, i))
+        output.write("    {{\"{}\", lexer_fn_{}}},\n".format(escape_cstr(pattern), i))
 
     output.write("    {NULL, NULL},\n")
     output.write("};\n")
