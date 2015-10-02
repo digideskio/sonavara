@@ -131,9 +131,12 @@ abc
 def
     return 2;
 
+[ \t]+
+
 *#x
 """) as sv:
         sv.test("abc", [1, "got abc"])
         sv.test("ab", [], True)
         sv.test("defabc", [2, 1, "got abc"])
+        sv.test("def  abc", [2, 1, "got abc"])
         sv.test("defab", [2], True)

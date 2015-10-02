@@ -42,10 +42,15 @@ start:
         }
 
         char *match = strndup(lexer->src - len, len);
+        int skip = 0;
 """)
-    output.write("int token = rule->action(match, {});\n".format("context" if context else "NULL"))
+    output.write("int token = rule->action(match, {}, &skip);\n".format("context" if context else "NULL"))
     output.write("""
         free(match);
+
+        if (skip) {
+            goto start;
+        }
 
         return token;
     }
@@ -152,11 +157,12 @@ def compile(input, output=None):
     for i, (pattern, body) in enumerate(parsed['fns']):
         output.write("#pragma GCC diagnostic push\n")
         output.write("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n")
-        output.write("static int lexer_fn_{}(char *match, void *_context) {{\n".format(i))
+        output.write("static int lexer_fn_{}(char *match, void *_context, int *_skip) {{\n".format(i))
         if 'context' in parsed:
             output.write("    {} *context = _context;\n".format(parsed['context']))
         output.write(body)
-        output.write("\n}\n")
+        output.write("\n    *_skip = 1;\n")
+        output.write("}\n")
         output.write("#pragma GCC diagnostic pop\n")
 
     output.write("struct lexer_rule rules[] = {\n")

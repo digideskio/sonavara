@@ -7,7 +7,7 @@
 
 struct lexer_rule {
     char const *pattern;
-    int (*action)(char *match, void *_context);
+    int (*action)(char *match, void *_context, int *_skip);
 
     struct regex *re;
 };
