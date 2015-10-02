@@ -23,7 +23,7 @@ def write_prelude(output, context):
 
     output.write("\n")
 
-    output.write("int lexer_lex(struct lexer *lexer{}) {{\n".format(", struct {} *context".format(context) if context else ""))
+    output.write("int lexer_lex(struct lexer *lexer{}) {{\n".format(", {} *context".format(context) if context else ""))
     output.write("""
 start:
     if (*lexer->src == 0) {
@@ -154,7 +154,7 @@ def compile(input, output=None):
         if 'context' in parsed:
             output.write("#pragma GCC diagnostic push\n")
             output.write("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n")
-            output.write("    struct {} *context = _context;\n".format(parsed['context']))
+            output.write("    {} *context = _context;\n".format(parsed['context']))
             output.write("#pragma GCC diagnostic pop\n")
         output.write(body)
         output.write("\n}\n")

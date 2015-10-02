@@ -122,7 +122,7 @@ def test_context():
         }
     }
 
-*set context = lexer_context
+*set context = struct lexer_context
 
 abc
     context->saved = strdup(match);
