@@ -30,7 +30,7 @@ start:
         return 0;
     }
 
-    for (struct lexer_rule *rule = rules; rule->pattern; ++rule) {
+    for (struct lexer_rule *rule = current_rules; rule->pattern; ++rule) {
         int len = regex_match_prefix(rule->re, lexer->src);
         if (len <= 0) {
             continue;
@@ -67,7 +67,9 @@ class Parser:
         if not self.current_action:
             return
 
-        self.result['fns'].append((self.current_action, self.current_action_io.getvalue()))
+        fns = self.result['fns'] if not self.current_mode else self.result['modes'][self.current_mode]
+
+        fns.append((self.current_action, self.current_action_io.getvalue()))
         self.current_action_io.close()
         self.current_action = None
         self.current_action_io = None
@@ -79,7 +81,7 @@ class Parser:
         if re.match(r'^\s', line):
             raise ValueError("Found action {} in base state".format(repr(line)))
 
-        option = re.match('^\*set\s+(\w+)\s*=(.+)$', line)
+        option = re.match(r'^\*set\s+(\w+)\s*=(.+)$', line)
         if option:
             key, value = option.groups()
             value = value.strip()
@@ -95,6 +97,13 @@ class Parser:
             return
 
         if line.startswith('*#'):
+            return
+
+        mode = re.match(r'^\*mode (\w+)$', line)
+        if mode:
+            name, = mode.groups()
+            self.result['modes'][name] = []
+            self.current_mode = name
             return
 
         self.state = 'action'
@@ -128,11 +137,13 @@ class Parser:
 
     def parse(self, input):
         self.state = 'base'
+        self.current_mode = None
         self.current_action = None
         self.current_action_io = None
 
         self.result = {
             'fns': [],
+            'modes': {},
             'raw': '',
         }
 
@@ -159,17 +170,13 @@ escape_cstr.subs = [
 ]
 
 
-def compile(input, output=None):
-    parsed = Parser().parse(input)
-    output.write(parsed['raw'])
-    write_prelude(output, parsed.get('context'))
-
-    for i, (pattern, body) in enumerate(parsed['fns']):
+def write_rules(fns, context, output, mode_name):
+    for i, (pattern, body) in enumerate(fns):
         output.write("#pragma GCC diagnostic push\n")
         output.write("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n")
-        output.write("static int lexer_fn_{}(char *match, void *_context, int *_skip) {{\n".format(i))
-        if 'context' in parsed:
-            output.write("    {} *context = _context;\n".format(parsed['context']))
+        output.write("static int lexer_fn_{}{}(char *match, void *_context, int *_skip) {{\n".format("{}_".format(mode_name) if mode_name else "", i))
+        if context:
+            output.write("    {} *context = _context;\n".format(context))
         output.write(body)
         output.write("\n")
         output.write("    *_skip = 1;\n")
@@ -177,12 +184,34 @@ def compile(input, output=None):
         output.write("}\n")
         output.write("#pragma GCC diagnostic pop\n")
 
-    output.write("struct lexer_rule rules[] = {\n")
-    for i, (pattern, body) in enumerate(parsed['fns']):
-        output.write("    {{\"{}\", lexer_fn_{}}},\n".format(escape_cstr(pattern), i))
+    output.write("struct lexer_rule rules{}[] = {{\n".format("_{}".format(mode_name) if mode_name else ""))
+    for i, (pattern, body) in enumerate(fns):
+        output.write("    {{\"{}\", lexer_fn_{}{}}},\n".format(escape_cstr(pattern), "{}_".format(mode_name) if mode_name else "", i))
 
     output.write("    {NULL, NULL},\n")
     output.write("};\n")
+
+
+def compile(input, output=None):
+    parsed = Parser().parse(input)
+    output.write(parsed['raw'])
+    write_prelude(output, parsed.get('context'))
+
+    for name in parsed['modes'].keys():
+        output.write("extern struct lexer_rule rules_{}[];\n".format(name))
+
+    write_rules(parsed['fns'], parsed.get('context'), output, None)
+    for name, fns in parsed['modes'].items():
+        write_rules(fns, parsed.get('context'), output, name)
+
+    output.write("struct lexer_rule *current_rules = rules;\n")
+
+    output.write("static int lexer_init_all() {\n")
+    output.write("    if (!lexer_init(rules)) { return 0; }\n")
+    for name in parsed['modes'].keys():
+        output.write("    if (!lexer_init(rules_{})) {{ return 0; }}\n".format(name))
+    output.write("    return 1;\n")
+    output.write("}")
 
     if isinstance(output, io.StringIO):
         v = output.getvalue()

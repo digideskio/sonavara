@@ -5,6 +5,9 @@
 #include "engine.c"
 #endif
 
+#define BEGIN(r) current_rules = rules_##r
+#define END() current_rules = rules
+
 struct lexer_rule {
     char const *pattern;
     int (*action)(char *match, void *_context, int *_skip);
@@ -12,6 +15,7 @@ struct lexer_rule {
     struct regex *re;
 };
 
+extern struct lexer_rule *current_rules;
 extern struct lexer_rule rules[];
 
 struct lexer {
@@ -19,7 +23,7 @@ struct lexer {
     char *buffer;
 };
 
-static int lexer_init(void) {
+static int lexer_init(struct lexer_rule *rules) {
     for (struct lexer_rule *rule = rules; rule->pattern; ++rule) {
         if (rule->re) {
             return 1;
@@ -33,10 +37,14 @@ static int lexer_init(void) {
     return 1;
 }
 
+static int lexer_init_all();
+
 struct lexer *lexer_start_str(char const *src) {
-    if (!lexer_init()) {
+    if (!lexer_init_all()) {
         return NULL;
     }
+
+    current_rules = rules;
 
     struct lexer *lexer = malloc(sizeof(*lexer));
     lexer->src = src;

@@ -147,6 +147,9 @@ def test_mode():
 "
     BEGIN(string);
 
+[^"]
+    return 9; /* nope */
+
 *mode string
 
 "
