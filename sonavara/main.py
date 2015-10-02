@@ -161,7 +161,9 @@ def compile(input, output=None):
         if 'context' in parsed:
             output.write("    {} *context = _context;\n".format(parsed['context']))
         output.write(body)
-        output.write("\n    *_skip = 1;\n")
+        output.write("\n")
+        output.write("    *_skip = 1;\n")
+        output.write("    return 0;\n")
         output.write("}\n")
         output.write("#pragma GCC diagnostic pop\n")
 
