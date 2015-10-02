@@ -150,14 +150,14 @@ def compile(input, output=None):
     write_prelude(output, parsed.get('context'))
 
     for i, (pattern, body) in enumerate(parsed['fns']):
+        output.write("#pragma GCC diagnostic push\n")
+        output.write("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n")
         output.write("static int lexer_fn_{}(char *match, void *_context) {{\n".format(i))
         if 'context' in parsed:
-            output.write("#pragma GCC diagnostic push\n")
-            output.write("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n")
             output.write("    {} *context = _context;\n".format(parsed['context']))
-            output.write("#pragma GCC diagnostic pop\n")
         output.write(body)
         output.write("\n}\n")
+        output.write("#pragma GCC diagnostic pop\n")
 
     output.write("struct lexer_rule rules[] = {\n")
     for i, (pattern, body) in enumerate(parsed['fns']):
