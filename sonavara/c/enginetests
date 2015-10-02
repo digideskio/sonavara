@@ -119,6 +119,21 @@ differ M
 match !
 match /
 
+regex [^"]+
+match abc
+differ abc"
+differ "
+
+regex [^\\]+
+match abc
+match "abc"
+differ abc\
+
+regex [^"\\]+
+match xyz
+differ xy"a
+differ xy\a
+
 regex [a\t]+
 match aa
 match 		
