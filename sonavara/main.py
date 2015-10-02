@@ -150,7 +150,13 @@ class Parser:
 
 
 def escape_cstr(s):
-    return re.sub(r"\\", "\\\\\\\\", s)
+    for sub in escape_cstr.subs:
+        s = re.sub(sub[0], sub[1], s)
+    return s
+escape_cstr.subs = [
+    (r"\\", "\\\\\\\\"),
+    (r"\"", "\\\\\""),
+]
 
 
 def compile(input, output=None):
